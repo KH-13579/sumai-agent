@@ -1,0 +1,696 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "sro": "https://example.org/ontology/software-requirements#",
+    "ha": "https://example.org/ontology/housing-agent#",
+    "schema": "https://schema.org/",
+    "dcterms": "http://purl.org/dc/terms/",
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+
+    "Requirement":          { "@id": "sro:Requirement" },
+    "FunctionalRequirement":    { "@id": "sro:FunctionalRequirement",    "@type": "@id" },
+    "NonFunctionalRequirement": { "@id": "sro:NonFunctionalRequirement", "@type": "@id" },
+    "SecurityRequirement":      { "@id": "sro:SecurityRequirement",      "@type": "@id" },
+    "PerformanceRequirement":   { "@id": "sro:PerformanceRequirement",   "@type": "@id" },
+
+    "Stakeholder":   { "@id": "sro:Stakeholder" },
+    "Goal":          { "@id": "sro:Goal" },
+    "UseCase":       { "@id": "sro:UseCase" },
+    "TestCase":      { "@id": "sro:TestCase" },
+    "ExternalSystem":{ "@id": "sro:ExternalSystem" },
+    "Persona":       { "@id": "ha:Persona" },
+
+    "requirementId":     { "@id": "sro:requirementId",     "@type": "xsd:string" },
+    "title":             { "@id": "dcterms:title",          "@type": "xsd:string" },
+    "description":       { "@id": "dcterms:description",   "@type": "xsd:string" },
+    "priority":          { "@id": "sro:priority",          "@type": "xsd:string" },
+    "status":            { "@id": "sro:status",            "@type": "xsd:string" },
+    "version":           { "@id": "dcterms:hasVersion",    "@type": "xsd:string" },
+    "createdDate":       { "@id": "dcterms:created",       "@type": "xsd:date" },
+    "modifiedDate":      { "@id": "dcterms:modified",      "@type": "xsd:date" },
+    "rationale":         { "@id": "sro:rationale",         "@type": "xsd:string" },
+    "acceptanceCriteria":{ "@id": "sro:acceptanceCriteria","@type": "xsd:string" },
+    "mvpFlag":           { "@id": "sro:mvpFlag",           "@type": "xsd:boolean" },
+
+    "dependsOn":         { "@id": "sro:dependsOn",         "@type": "@id", "@container": "@set" },
+    "conflictsWith":     { "@id": "sro:conflictsWith",     "@type": "@id", "@container": "@set" },
+    "refines":           { "@id": "sro:refines",           "@type": "@id", "@container": "@set" },
+    "realizes":          { "@id": "sro:realizes",          "@type": "@id", "@container": "@set" },
+    "verifiedBy":        { "@id": "sro:verifiedBy",        "@type": "@id", "@container": "@set" },
+    "derivedFrom":       { "@id": "sro:derivedFrom",       "@type": "@id", "@container": "@set" },
+    "assignedTo":        { "@id": "sro:assignedTo",        "@type": "@id", "@container": "@set" },
+    "involvesStakeholder":{ "@id": "sro:involvesStakeholder","@type": "@id", "@container": "@set" },
+
+    "stakeholderId":     { "@id": "sro:stakeholderId",     "@type": "xsd:string" },
+    "role":              { "@id": "sro:role",              "@type": "xsd:string" },
+    "interests":         { "@id": "sro:interests",         "@type": "xsd:string" },
+    "influence":         { "@id": "sro:influence",         "@type": "xsd:string" },
+    "personaType":       { "@id": "ha:personaType",        "@type": "xsd:string" },
+    "ageRange":          { "@id": "ha:ageRange",           "@type": "xsd:string" },
+    "annualIncome":      { "@id": "ha:annualIncome",       "@type": "xsd:string" },
+    "familyStructure":   { "@id": "ha:familyStructure",   "@type": "xsd:string" },
+    "painPoints":        { "@id": "ha:painPoints",         "@container": "@list" },
+    "expectations":      { "@id": "ha:expectations",      "@container": "@list" },
+
+    "goalId":            { "@id": "sro:goalId",            "@type": "xsd:string" },
+    "goalType":          { "@id": "sro:goalType",          "@type": "xsd:string" },
+    "measuredBy":        { "@id": "sro:measuredBy",        "@type": "xsd:string" },
+    "supportedBy":       { "@id": "sro:supportedBy",       "@type": "@id", "@container": "@set" },
+
+    "useCaseId":         { "@id": "sro:useCaseId",         "@type": "xsd:string" },
+    "actor":             { "@id": "sro:actor",             "@type": "@id", "@container": "@set" },
+    "trigger":           { "@id": "sro:trigger",           "@type": "xsd:string" },
+    "precondition":      { "@id": "sro:precondition",      "@type": "xsd:string" },
+    "mainFlow":          { "@id": "sro:mainFlow",          "@container": "@list" },
+    "alternativeFlow":   { "@id": "sro:alternativeFlow",   "@container": "@list" },
+    "postcondition":     { "@id": "sro:postcondition",     "@type": "xsd:string" },
+    "includes":          { "@id": "sro:includes",          "@type": "@id", "@container": "@set" },
+    "extends":           { "@id": "sro:extends",           "@type": "@id", "@container": "@set" },
+
+    "testCaseId":        { "@id": "sro:testCaseId",        "@type": "xsd:string" },
+    "testType":          { "@id": "sro:testType",          "@type": "xsd:string" },
+    "testInput":         { "@id": "sro:testInput",         "@type": "xsd:string" },
+    "expectedOutput":    { "@id": "sro:expectedOutput",    "@type": "xsd:string" },
+    "testSteps":         { "@id": "sro:testSteps",         "@container": "@list" },
+    "verifies":          { "@id": "sro:verifies",          "@type": "@id", "@container": "@set" },
+
+    "externalSystemId":  { "@id": "sro:externalSystemId",  "@type": "xsd:string" },
+    "apiEndpoint":       { "@id": "ha:apiEndpoint",        "@type": "xsd:anyURI" },
+    "dataType":          { "@id": "ha:dataType",           "@type": "xsd:string" },
+    "availability":      { "@id": "ha:availability",       "@type": "xsd:string" }
+  },
+
+  "@graph": [
+
+    {
+      "@id": "ha:Ontology",
+      "@type": "owl:Ontology",
+      "title": "AI住宅コンシェルジュ ソフトウェア要件オントロジー",
+      "description": "初回住宅購入者向けAIエージェントサービスの要件を体系化するオントロジー。間取り生成・見積・建築基準法チェックを一気通貫で提供するプラットフォームを対象とする。",
+      "version": "1.0.0",
+      "createdDate": "2026-06-09"
+    },
+
+    {
+      "@id": "ha:PersonaA",
+      "@type": "Persona",
+      "stakeholderId": "STK-001",
+      "title": "初めて購入層（ペルソナA）",
+      "personaType": "A-初めて購入層",
+      "ageRange": "30〜35歳",
+      "annualIncome": "600〜900万円",
+      "familyStructure": "夫婦＋子（未就学）",
+      "role": "主要エンドユーザー",
+      "influence": "高",
+      "interests": "予算最大化、住宅会社選びに迷っている、スマホ・SUUMO/HOMES利用",
+      "painPoints": [
+        "どの住宅会社が良いかわからない",
+        "価格相場がわからない",
+        "間取りの良し悪しがわからない",
+        "住宅会社の営業担当を信用してよいかわからない",
+        "住宅会社や住宅展示場を回る時間がない"
+      ],
+      "expectations": [
+        "予算と条件で間取り＋見積を一気に見たい",
+        "中立的なAI住宅コンシェルジュによる支援"
+      ]
+    },
+    {
+      "@id": "ha:PersonaB",
+      "@type": "Persona",
+      "stakeholderId": "STK-002",
+      "title": "建替え・住替え層（ペルソナB）",
+      "personaType": "B-建替え・住替え層",
+      "ageRange": "45〜65歳",
+      "annualIncome": "900〜1,400万円",
+      "familyStructure": "夫婦＋子2名（高校・大学）",
+      "role": "セカンダリーユーザー",
+      "influence": "中",
+      "interests": "老朽化・二世帯への建替え検討",
+      "painPoints": ["営業前比較検討の印象形成が欲しい"],
+      "expectations": ["複数HMの並行見積比較"]
+    },
+    {
+      "@id": "ha:PersonaC",
+      "@type": "Persona",
+      "stakeholderId": "STK-003",
+      "title": "土地ありだけ層（ペルソナC）",
+      "personaType": "C-土地ありだけ層",
+      "ageRange": "35〜45歳",
+      "annualIncome": "700〜1,200万円",
+      "familyStructure": "夫婦＋子1〜2、親同居検討中",
+      "role": "セカンダリーユーザー",
+      "influence": "中",
+      "interests": "相続した土地で自由設計を希望",
+      "painPoints": ["諸手続き処理が煩雑、自分で要件整理"],
+      "expectations": ["建築基準法チェック後に成立するか確認したい"]
+    },
+    {
+      "@id": "ha:AIAgent",
+      "@type": "Stakeholder",
+      "stakeholderId": "STK-004",
+      "title": "AIオーケストレーター",
+      "role": "システムコンポーネント",
+      "influence": "高",
+      "interests": "間取りAI・見積AI・法規AIのオーケストレーション（Azure OpenAI + LangGraph）"
+    },
+    {
+      "@id": "ha:HousingMaker",
+      "@type": "Stakeholder",
+      "stakeholderId": "STK-005",
+      "title": "住宅メーカー・工務店",
+      "role": "サプライヤー",
+      "influence": "中",
+      "interests": "ユーザーに課金せずサプライヤー課金モデル、案件紹介受取"
+    },
+    {
+      "@id": "ha:SystemAdmin",
+      "@type": "Stakeholder",
+      "stakeholderId": "STK-006",
+      "title": "サービス運営者",
+      "role": "管理者",
+      "influence": "高",
+      "interests": "サービス品質・法令遵守・ビジネスモデル管理"
+    },
+
+    {
+      "@id": "ha:Goal-NeutralConsulting",
+      "@type": "Goal",
+      "goalId": "GOAL-001",
+      "title": "中立的AIコンシェルジュによる住宅購入支援",
+      "description": "ハウスメーカー非依存・営業バイアスなしのAIが、初回住宅購入者の意思決定を包括支援する",
+      "goalType": "BusinessGoal",
+      "measuredBy": "ユーザー満足度スコア4.0以上、住宅メーカー成約転換率",
+      "involvesStakeholder": ["ha:PersonaA", "ha:PersonaB", "ha:PersonaC"]
+    },
+    {
+      "@id": "ha:Goal-OneStopService",
+      "@type": "Goal",
+      "goalId": "GOAL-002",
+      "title": "間取り生成・見積・法規チェック一気通貫",
+      "description": "質問に答えるだけで家が設計できる体験を提供し、設計知識不要なUXを実現する",
+      "goalType": "SystemGoal",
+      "measuredBy": "ユーザーがサービス内で設計から見積まで完結できる完了率80%以上",
+      "supportedBy": ["ha:Goal-NeutralConsulting"]
+    },
+    {
+      "@id": "ha:Goal-MarketGap",
+      "@type": "Goal",
+      "goalId": "GOAL-003",
+      "title": "日本語一気通貫サービスの空白地帯を埋める",
+      "description": "「間取り生成＋見積＋建築基準法チェック」を一気通貫で提供する日本語サービスは存在しない。この空白を埋める。",
+      "goalType": "BusinessGoal",
+      "measuredBy": "競合調査での機能優位性維持",
+      "supportedBy": ["ha:Goal-OneStopService"]
+    },
+
+    {
+      "@id": "ha:FR-001",
+      "@type": "FunctionalRequirement",
+      "requirementId": "FR-001",
+      "title": "ユーザープロファイル登録・管理（MVP）",
+      "description": "ユーザーIDをキーにMVP登録情報（総予算・家族構成・間取り要望・優先順位）を保存・管理する。ユーザー登録有無はビジネスモデルの設計による。",
+      "priority": "Must",
+      "mvpFlag": true,
+      "status": "Proposed",
+      "rationale": "毎回入力の回避のため、登録時情報として保持することが望ましい（MVP要件）",
+      "acceptanceCriteria": "ユーザーが一度入力した基本情報を再入力なしに次回セッションで利用できる",
+      "realizes": ["ha:Goal-OneStopService"],
+      "involvesStakeholder": ["ha:PersonaA"],
+      "verifiedBy": ["ha:TC-001"]
+    },
+    {
+      "@id": "ha:FR-002",
+      "@type": "FunctionalRequirement",
+      "requirementId": "FR-002",
+      "title": "必須入力項目の収集（MVP）",
+      "description": "総予算（建物＋土地）・建物予算・土地有無・建築予定エリア・人数・年齢層（子の年齢）・将来計画・部屋数（LDK＋部屋数）・延床面積・階数・優先順位（コスト重視/広さ重視/デザイン重視）をUI上で収集する",
+      "priority": "Must",
+      "mvpFlag": true,
+      "status": "Proposed",
+      "rationale": "AIが間取りと見積を生成するための最低限の入力情報",
+      "acceptanceCriteria": "全必須フィールドが入力されるまで次ステップに進めない。選択式＋スライダーで入力簡略化",
+      "dependsOn": ["ha:FR-001"],
+      "realizes": ["ha:Goal-OneStopService"],
+      "involvesStakeholder": ["ha:PersonaA", "ha:PersonaB"],
+      "verifiedBy": ["ha:TC-002"]
+    },
+    {
+      "@id": "ha:FR-003",
+      "@type": "FunctionalRequirement",
+      "requirementId": "FR-003",
+      "title": "推奨入力項目の収集",
+      "description": "土地情報（広さ/形状/地図図面アップロードまたは手書き）・構造希望（木造/鉄骨/RC/こだわらない）・駐車場台数・こだわりタグ（ワークスペース/パントリー/土間/和室/吹抜け/ロフト）・設備（太陽光/蓄電池/全館空調/床暖房/EV充電）・ライフスタイル（在宅勤務/ペット/親同居予定/趣味部屋）・性能（耐震等級/断熱等級/ZEH）を任意収集する",
+      "priority": "Should",
+      "mvpFlag": false,
+      "status": "Proposed",
+      "rationale": "より精度の高い間取り提案のための追加情報。AIがフリーテキストを補完入力",
+      "acceptanceCriteria": "任意項目として表示、未入力でも次ステップ進行可。AIが未入力項目の推論補完を行う",
+      "dependsOn": ["ha:FR-002"],
+      "realizes": ["ha:Goal-OneStopService"],
+      "involvesStakeholder": ["ha:PersonaA"],
+      "verifiedBy": ["ha:TC-003"]
+    },
+    {
+      "@id": "ha:FR-004",
+      "@type": "FunctionalRequirement",
+      "requirementId": "FR-004",
+      "title": "AI間取り生成",
+      "description": "ユーザー入力条件を基にAI（Azure OpenAI GPT-4系 + Three.js）が複数の間取りプランを生成し、2D/3Dで視覚化する",
+      "priority": "Must",
+      "mvpFlag": true,
+      "status": "Proposed",
+      "rationale": "既存サービスとの差別化要素。建築基準法連携による実務レベルの出力を目指す",
+      "acceptanceCriteria": "入力から60秒以内に最低3つの間取りプランを生成。Three.js / Autodesk Formaによる3Dプレビュー表示",
+      "dependsOn": ["ha:FR-002", "ha:FR-003"],
+      "realizes": ["ha:Goal-OneStopService", "ha:Goal-MarketGap"],
+      "involvesStakeholder": ["ha:PersonaA", "ha:AIAgent"],
+      "verifiedBy": ["ha:TC-004", "ha:TC-005"]
+    },
+    {
+      "@id": "ha:FR-005",
+      "@type": "FunctionalRequirement",
+      "requirementId": "FR-005",
+      "title": "AI見積生成",
+      "description": "建材・設備データ（建材住設品マスタAPI）と建築業者統計を参照してコスト見積を自動生成する。53メーカー・7,800万点超のカタログ情報を活用",
+      "priority": "Must",
+      "mvpFlag": true,
+      "status": "Proposed",
+      "rationale": "価格相場がわからないというペルソナAの痛みを解決",
+      "acceptanceCriteria": "間取りプランに対応する建物本体価格・設備費・諸費用の見積明細を出力。精度±15%以内",
+      "dependsOn": ["ha:FR-004"],
+      "realizes": ["ha:Goal-OneStopService"],
+      "involvesStakeholder": ["ha:PersonaA", "ha:AIAgent"],
+      "verifiedBy": ["ha:TC-006"]
+    },
+    {
+      "@id": "ha:FR-006",
+      "@type": "FunctionalRequirement",
+      "requirementId": "FR-006",
+      "title": "建築基準法自動チェック",
+      "description": "e-Gov法令API・国土地理院API・自治体データを参照して建蔽率・容積率・用途地域・日影規制・道路斜線などの建築基準法適合性を自動チェックする",
+      "priority": "Must",
+      "mvpFlag": true,
+      "status": "Proposed",
+      "rationale": "日本語一気通貫サービスの最大の差別化要因。既存サービスに法規チェック機能は存在しない",
+      "acceptanceCriteria": "生成した間取りプランについて建築基準法適合・非適合をレポート形式で出力。非適合の場合は修正案を提示",
+      "dependsOn": ["ha:FR-004"],
+      "realizes": ["ha:Goal-MarketGap", "ha:Goal-OneStopService"],
+      "involvesStakeholder": ["ha:PersonaC", "ha:AIAgent"],
+      "verifiedBy": ["ha:TC-007", "ha:TC-008"]
+    },
+    {
+      "@id": "ha:FR-007",
+      "@type": "FunctionalRequirement",
+      "requirementId": "FR-007",
+      "title": "住宅メーカー比較・マッチング",
+      "description": "生成した間取り・見積・条件を基に複数住宅メーカーの提案を自動比較。プラン比較後にユーザー承認で住宅メーカーへ持込む",
+      "priority": "Should",
+      "mvpFlag": false,
+      "status": "Proposed",
+      "rationale": "既存サービス差別化表の「連絡」軸で「自作⇒住宅メーカーへ持込」を実現",
+      "acceptanceCriteria": "複数HMのプランを横並び比較表示。ユーザーが選択したHMへの相談申込みフロー完結",
+      "dependsOn": ["ha:FR-005", "ha:FR-006"],
+      "realizes": ["ha:Goal-NeutralConsulting"],
+      "involvesStakeholder": ["ha:PersonaA", "ha:PersonaB", "ha:HousingMaker"],
+      "verifiedBy": ["ha:TC-009"]
+    },
+    {
+      "@id": "ha:FR-008",
+      "@type": "FunctionalRequirement",
+      "requirementId": "FR-008",
+      "title": "上級者向け任意入力（上級者向け自力）",
+      "description": "用途地域（自動判定推奨）・建蔽率・容積率・接道方向・距離・インスピレーション画像アップロード等の上級者向け入力項目を提供",
+      "priority": "Could",
+      "mvpFlag": false,
+      "status": "Proposed",
+      "rationale": "土地ありだけ層（ペルソナC）など専門知識があるユーザー向け",
+      "acceptanceCriteria": "詳細設定パネルを折りたたみUIで提供。入力値はAI自動判定値を上書き可能",
+      "dependsOn": ["ha:FR-003"],
+      "realizes": ["ha:Goal-OneStopService"],
+      "involvesStakeholder": ["ha:PersonaC"],
+      "verifiedBy": ["ha:TC-010"]
+    },
+
+    {
+      "@id": "ha:NFR-001",
+      "@type": "NonFunctionalRequirement",
+      "requirementId": "NFR-001",
+      "title": "ユーザビリティ：スマートフォン対応UI",
+      "description": "ペルソナAはスマホ中心利用。全機能をスマートフォン（iOS/Android）で操作可能とする",
+      "priority": "Must",
+      "status": "Proposed",
+      "acceptanceCriteria": "Lighthouse モバイルスコア85以上。タップターゲット48px以上",
+      "realizes": ["ha:Goal-NeutralConsulting"],
+      "involvesStakeholder": ["ha:PersonaA"],
+      "verifiedBy": ["ha:TC-011"]
+    },
+    {
+      "@id": "ha:NFR-002",
+      "@type": "NonFunctionalRequirement",
+      "requirementId": "NFR-002",
+      "title": "可用性：サービス稼働率",
+      "description": "住宅検討は週末・夜間に集中する。99.5%以上の月次稼働率を維持する",
+      "priority": "Should",
+      "status": "Proposed",
+      "acceptanceCriteria": "月次稼働率99.5%以上。計画停止は深夜2:00〜5:00に限定",
+      "verifiedBy": ["ha:TC-012"]
+    },
+    {
+      "@id": "ha:NFR-003",
+      "@type": "NonFunctionalRequirement",
+      "requirementId": "NFR-003",
+      "title": "拡張性：マルチAI構成オーケストレーション",
+      "description": "間取りAI・見積AI・法規AIを独立コンポーネントとして実装し、LangGraphによるオーケストレーションで統合。各AIは独立してアップグレード可能",
+      "priority": "Must",
+      "status": "Proposed",
+      "rationale": "競合が真似しにくい構造。マルチAI融合が差別化の核心",
+      "acceptanceCriteria": "各AIコンポーネントを独立デプロイ可能。LangGraphワークフローで組み合わせテスト完了",
+      "verifiedBy": ["ha:TC-013"]
+    },
+    {
+      "@id": "ha:NFR-004",
+      "@type": "NonFunctionalRequirement",
+      "requirementId": "NFR-004",
+      "title": "保守性：国内オープンデータ中心アーキテクチャ",
+      "description": "海外SaaSはAPI非公開が多く連携が破綻しやすい。PLATEAU（国土数値情報・建設物件IOBA）など国内オープンデータを中心に設計し、自前オーケストレーションで組む",
+      "priority": "Should",
+      "status": "Proposed",
+      "rationale": "日本特化の差別化。海外SaaSより国内オープンデータのほうが仕様安定",
+      "acceptanceCriteria": "外部依存APIの80%以上が国内公開API。APIバージョン変更時の影響範囲が1サービスに局所化",
+      "verifiedBy": ["ha:TC-014"]
+    },
+
+    {
+      "@id": "ha:SR-001",
+      "@type": "SecurityRequirement",
+      "requirementId": "SR-001",
+      "title": "ユーザー個人情報・住宅情報の保護",
+      "description": "家族構成・年収・住所・土地情報などの個人情報を適切に暗号化・アクセス制御する",
+      "priority": "Must",
+      "status": "Proposed",
+      "acceptanceCriteria": "個人情報は保存時AES-256暗号化。APIアクセスはOAuth2.0認証必須。個人情報保護法・APPI準拠",
+      "verifiedBy": ["ha:TC-015"]
+    },
+    {
+      "@id": "ha:SR-002",
+      "@type": "SecurityRequirement",
+      "requirementId": "SR-002",
+      "title": "外部API通信のセキュリティ",
+      "description": "国土地理院API・e-Gov法令API・建材マスタAPIとの通信はTLS1.2以上で保護。APIキー等のシークレットはシークレットマネージャーで管理",
+      "priority": "Must",
+      "status": "Proposed",
+      "acceptanceCriteria": "全API通信TLS1.2以上。APIシークレットはAzure Key Vault管理。ログにシークレット非出力",
+      "dependsOn": ["ha:SR-001"],
+      "verifiedBy": ["ha:TC-016"]
+    },
+    {
+      "@id": "ha:SR-003",
+      "@type": "SecurityRequirement",
+      "requirementId": "SR-003",
+      "title": "AIハルシネーション対策（法規情報）",
+      "description": "建築基準法チェック結果にAIハルシネーションが含まれると法的リスクが生じる。RAGによる公式法令DBへの根拠明示が必須",
+      "priority": "Must",
+      "status": "Proposed",
+      "rationale": "法規情報の誤りはユーザーへの実害につながる。免責事項表示と合わせてRAGで根拠を提示",
+      "acceptanceCriteria": "法規チェック結果には参照した法令条文のリンクを必ず明示。ユーザーへ「専門家への確認推奨」の免責表示",
+      "dependsOn": ["ha:FR-006"],
+      "verifiedBy": ["ha:TC-017"]
+    },
+
+    {
+      "@id": "ha:PR-001",
+      "@type": "PerformanceRequirement",
+      "requirementId": "PR-001",
+      "title": "間取り生成レスポンスタイム",
+      "description": "ユーザー入力完了から間取りプランの初期表示まで60秒以内",
+      "priority": "Must",
+      "status": "Proposed",
+      "acceptanceCriteria": "p95レスポンスタイム ≤ 60秒。進捗表示により体感待ち時間を軽減",
+      "conflictsWith": ["ha:NFR-003"],
+      "verifiedBy": ["ha:TC-018"]
+    },
+    {
+      "@id": "ha:PR-002",
+      "@type": "PerformanceRequirement",
+      "requirementId": "PR-002",
+      "title": "同時接続ユーザー数スケーラビリティ",
+      "description": "週末ピーク時に1,000同時接続ユーザーを処理できるスケーラビリティを確保する",
+      "priority": "Should",
+      "status": "Proposed",
+      "acceptanceCriteria": "負荷テストで1,000同時接続時のエラー率1%以下・p95レスポンス ≤ 90秒",
+      "verifiedBy": ["ha:TC-019"]
+    },
+
+    {
+      "@id": "ha:UC-001",
+      "@type": "UseCase",
+      "useCaseId": "UC-001",
+      "title": "初回住宅購入者の間取り生成から見積取得",
+      "description": "初めて住宅購入を検討するユーザーが、条件入力から間取りプランと見積を取得するまでの基本フロー",
+      "actor": ["ha:PersonaA"],
+      "trigger": "ユーザーがサービスにアクセスし「はじめる」ボタンをタップ",
+      "precondition": "ユーザーが住宅購入を検討している",
+      "mainFlow": [
+        "1. ユーザーが総予算・家族構成・エリアなどの必須項目を入力（選択式＋スライダー）",
+        "2. ユーザーが任意で間取りこだわりタグ・設備希望を選択",
+        "3. AIエージェントが入力情報を解析し間取り生成AIへ送信",
+        "4. 間取りAIが3つ以上の間取りプランを60秒以内に生成",
+        "5. ユーザーが間取りプランをスワイプで確認（Three.js 3Dプレビュー）",
+        "6. 見積AIが建材マスタAPIを参照し見積明細を自動生成",
+        "7. 建築基準法AIが法令APIを参照し適合性チェック結果を表示",
+        "8. ユーザーが結果を保存またはHMへの相談申込みを選択"
+      ],
+      "alternativeFlow": [
+        "3a. 入力情報が不足している場合、AIが追加質問をチャット形式で行う",
+        "7a. 法規非適合の場合、修正案を自動提案する"
+      ],
+      "postcondition": "ユーザーが間取り・見積・法規チェック結果を取得済み",
+      "realizes": ["ha:Goal-OneStopService"],
+      "includes": ["ha:UC-002", "ha:UC-003"],
+      "involvesStakeholder": ["ha:PersonaA", "ha:AIAgent"]
+    },
+    {
+      "@id": "ha:UC-002",
+      "@type": "UseCase",
+      "useCaseId": "UC-002",
+      "title": "建築基準法適合性チェック",
+      "description": "生成された間取りプランについて建築基準法（建蔽率・容積率・用途地域等）の適合性を自動チェックする",
+      "actor": ["ha:AIAgent"],
+      "trigger": "間取りプラン生成完了イベント",
+      "precondition": "間取りプランと建築予定エリアが確定している",
+      "mainFlow": [
+        "1. 国土地理院APIから用途地域・建蔽率・容積率データを取得",
+        "2. e-Gov法令APIから該当建築基準法条文を取得（RAG検索）",
+        "3. 自治体データから地域固有の規制情報を参照",
+        "4. 間取りプランと法規制情報を照合し適合判定",
+        "5. 参照条文付きの適合レポートをユーザーに表示"
+      ],
+      "postcondition": "法規適合/非適合レポートが生成され、根拠条文が明示されている",
+      "realizes": ["ha:Goal-MarketGap"],
+      "involvesStakeholder": ["ha:AIAgent", "ha:PersonaC"]
+    },
+    {
+      "@id": "ha:UC-003",
+      "@type": "UseCase",
+      "useCaseId": "UC-003",
+      "title": "住宅メーカー比較・相談申込み",
+      "description": "生成した間取り・見積をもとに複数住宅メーカーのプランを比較し、選択したHMへ相談申込みを行う",
+      "actor": ["ha:PersonaA", "ha:HousingMaker"],
+      "trigger": "ユーザーが「住宅メーカーと相談」ボタンをタップ",
+      "precondition": "間取り・見積・法規チェック結果が取得済み",
+      "mainFlow": [
+        "1. AIが条件に合致する住宅メーカーを絞り込み表示",
+        "2. ユーザーが複数HMのプランを横並び比較",
+        "3. ユーザーが相談したいHMを選択",
+        "4. ユーザーの間取り・見積情報をHMへ自動送付",
+        "5. HM担当者との面談予約フローへ進む"
+      ],
+      "postcondition": "HMへの相談申込み完了。HMはユーザー情報を受領",
+      "realizes": ["ha:Goal-NeutralConsulting"],
+      "involvesStakeholder": ["ha:PersonaA", "ha:HousingMaker"]
+    },
+
+    {
+      "@id": "ha:TC-001",
+      "@type": "TestCase",
+      "testCaseId": "TC-001",
+      "title": "ユーザープロファイル登録・再利用テスト",
+      "testType": "FunctionalTest",
+      "testInput": "ユーザーが基本情報（総予算800万、家族3人、エリア東京）を入力してアカウント登録",
+      "expectedOutput": "次回ログイン時に入力情報が自動復元される",
+      "testSteps": [
+        "1. 新規ユーザーとして基本情報を入力",
+        "2. アカウント登録完了",
+        "3. セッションをクリアしてログアウト",
+        "4. 再ログインし入力情報の自動復元を確認"
+      ],
+      "verifies": ["ha:FR-001"]
+    },
+    {
+      "@id": "ha:TC-002",
+      "@type": "TestCase",
+      "testCaseId": "TC-002",
+      "title": "必須入力バリデーションテスト",
+      "testType": "FunctionalTest",
+      "testInput": "総予算未入力の状態で次ステップへ進もうとする",
+      "expectedOutput": "エラーメッセージが表示され次ステップへ進めない",
+      "testSteps": [
+        "1. 入力フォームで総予算フィールドを空欄のまま",
+        "2. 次へボタンをタップ",
+        "3. バリデーションエラー表示を確認",
+        "4. 全必須項目入力後に正常遷移することを確認"
+      ],
+      "verifies": ["ha:FR-002"]
+    },
+    {
+      "@id": "ha:TC-004",
+      "@type": "TestCase",
+      "testCaseId": "TC-004",
+      "title": "間取り生成パフォーマンステスト（60秒以内）",
+      "testType": "PerformanceTest",
+      "testInput": "標準的なユーザー入力（4LDK・延床120㎡・東京都・予算5000万）",
+      "expectedOutput": "60秒以内に3つ以上の間取りプランが表示される",
+      "testSteps": [
+        "1. 標準入力を用意",
+        "2. リクエスト送信タイムスタンプを記録",
+        "3. 最初の間取りプランが表示されたタイムスタンプを記録",
+        "4. 差分が60秒以内であることを確認",
+        "5. 生成されたプランが最低3つであることを確認"
+      ],
+      "verifies": ["ha:FR-004", "ha:PR-001"]
+    },
+    {
+      "@id": "ha:TC-005",
+      "@type": "TestCase",
+      "testCaseId": "TC-005",
+      "title": "Three.js 3Dプレビュー表示テスト",
+      "testType": "FunctionalTest",
+      "testInput": "生成された間取りプランのID",
+      "expectedOutput": "スマートフォンブラウザでThree.jsによる3Dプレビューが表示される",
+      "testSteps": [
+        "1. iOS Safari / Android Chromeで間取りプランを表示",
+        "2. 3Dプレビューボタンをタップ",
+        "3. Three.jsレンダリングが10秒以内に表示されることを確認",
+        "4. ピンチズームとドラッグ回転が動作することを確認"
+      ],
+      "verifies": ["ha:FR-004"]
+    },
+    {
+      "@id": "ha:TC-007",
+      "@type": "TestCase",
+      "testCaseId": "TC-007",
+      "title": "建築基準法適合チェック（正常系）テスト",
+      "testType": "FunctionalTest",
+      "testInput": "第1種低層住居専用地域・建蔽率50%・容積率100%の土地に対して建蔽率40%の間取りプラン",
+      "expectedOutput": "「建築基準法適合」と判定され、参照した法令条文が表示される",
+      "testSteps": [
+        "1. テスト用土地情報を入力",
+        "2. 建蔽率40%の間取りプランを生成",
+        "3. 法規チェック実行",
+        "4. 適合判定と根拠条文（建築基準法第53条等）の表示を確認"
+      ],
+      "verifies": ["ha:FR-006", "ha:SR-003"]
+    },
+    {
+      "@id": "ha:TC-008",
+      "@type": "TestCase",
+      "testCaseId": "TC-008",
+      "title": "建築基準法非適合チェック（修正案提示）テスト",
+      "testType": "FunctionalTest",
+      "testInput": "建蔽率50%制限の土地に建蔽率60%の間取りプラン",
+      "expectedOutput": "「建築基準法非適合」と判定され、建蔽率を50%以下にした修正案が提示される",
+      "testSteps": [
+        "1. 建蔽率オーバーの間取りプランを作成",
+        "2. 法規チェック実行",
+        "3. 非適合判定と具体的な違反内容の表示を確認",
+        "4. 修正案プランが自動生成されることを確認"
+      ],
+      "verifies": ["ha:FR-006"]
+    },
+    {
+      "@id": "ha:TC-015",
+      "@type": "TestCase",
+      "testCaseId": "TC-015",
+      "title": "個人情報暗号化・アクセス制御テスト",
+      "testType": "SecurityTest",
+      "testInput": "ユーザーの家族構成・年収・エリア情報",
+      "expectedOutput": "DBに保存された個人情報がAES-256暗号化されており、認証なしではアクセス不可",
+      "testSteps": [
+        "1. ユーザー登録・情報入力",
+        "2. DB直接参照で暗号化状態を確認（AES-256）",
+        "3. 未認証状態でのAPI呼び出しが401を返すことを確認",
+        "4. OAuth2.0トークンなしでのデータアクセス拒否を確認"
+      ],
+      "verifies": ["ha:SR-001"]
+    },
+    {
+      "@id": "ha:TC-018",
+      "@type": "TestCase",
+      "testCaseId": "TC-018",
+      "title": "間取り生成p95レスポンステスト",
+      "testType": "PerformanceTest",
+      "testInput": "100リクエストの標準入力を並行実行",
+      "expectedOutput": "p95レスポンスタイムが60秒以内",
+      "testSteps": [
+        "1. 負荷テストツール（k6等）で100並列リクエストを送信",
+        "2. 各レスポンスタイムを記録",
+        "3. p95値を算出",
+        "4. 60秒以内であることを確認"
+      ],
+      "verifies": ["ha:PR-001"]
+    },
+
+    {
+      "@id": "ha:EXT-001",
+      "@type": "ExternalSystem",
+      "externalSystemId": "EXT-001",
+      "title": "国土地理院API（不動産情報ライブラリ）",
+      "description": "不動産取引価格、地価公示等の価格情報、防災情報、都市計画情報、周辺施設・享受等、不動産に関する情報を提供する国土交通省のWebサイト",
+      "apiEndpoint": "https://www.reinfolib.mlit.go.jp/",
+      "dataType": "用途地域・建蔽率・容積率・地価情報・防災情報",
+      "availability": "公開API"
+    },
+    {
+      "@id": "ha:EXT-002",
+      "@type": "ExternalSystem",
+      "externalSystemId": "EXT-002",
+      "title": "建材住設品マスタAPI（オフィスオペレーション社）",
+      "description": "53メーカー・7,800万点超の建材・住設品カタログ情報を提供するAPI。見積・受発注業務に活用可能",
+      "apiEndpoint": "https://office-operation.co.jp/service/master.php",
+      "dataType": "商品コード・入数・商品名・規格サイズ・定価・単位",
+      "availability": "有償API"
+    },
+    {
+      "@id": "ha:EXT-003",
+      "@type": "ExternalSystem",
+      "externalSystemId": "EXT-003",
+      "title": "e-Gov法令API",
+      "description": "デジタル庁提供の日本法規公式API。建築基準法を含む最新法令条文テキストデータ",
+      "apiEndpoint": "https://laws.e-gov.go.jp/file/houreiapi_shiyosyo.pdf",
+      "dataType": "法令条文テキスト（建築基準法・都市計画法等）",
+      "availability": "公開API"
+    },
+    {
+      "@id": "ha:EXT-004",
+      "@type": "ExternalSystem",
+      "externalSystemId": "EXT-004",
+      "title": "PLATEAU（国土地理院タイル）",
+      "description": "国土数値情報・建設物件IOBA等の地図タイルデータ。国内オープンデータの中核",
+      "dataType": "3D都市モデル・建物形状・地形データ",
+      "availability": "公開オープンデータ"
+    },
+    {
+      "@id": "ha:EXT-005",
+      "@type": "ExternalSystem",
+      "externalSystemId": "EXT-005",
+      "title": "Azure OpenAI（GPT-4系）",
+      "description": "間取り生成・見積・法規チェックの各AIコンポーネントの推論エンジン。LangGraphでオーケストレーション",
+      "dataType": "LLM推論API",
+      "availability": "有償クラウドサービス"
+    }
+  ]
+}
