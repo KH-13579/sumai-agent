@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スマイエージェント — 住宅AIコンシェルジュ</title>
+<style>
+  /* ─── リセット & ベース ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── ヘッダー ─── */
+  header {
+    background: linear-gradient(135deg, #1a4a7a 0%, #2563a8 100%);
+    color: #fff;
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: 0.05em; }
+  header .badge {
+    background: rgba(255,255,255,0.2);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+
+  /* ─── メインレイアウト ─── */
+  main {
+    flex: 1;
+    display: flex;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  /* ─── 左サイドバー ─── */
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    padding: 16px;
+  }
+  .card h2 {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1a4a7a;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e8f0fa;
+  }
+
+  /* ─── ペルソナボタン ─── */
+  .preset-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    border: 1.5px solid #d1dfe8;
+    border-radius: 8px;
+    background: #f7faff;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: #334155;
+    margin-bottom: 6px;
+    transition: all 0.15s;
+  }
+  .preset-btn:hover { border-color: #2563a8; background: #eff5ff; color: #1a4a7a; }
+  .preset-btn .persona-name { font-weight: 700; font-size: 0.85rem; color: #1a4a7a; display: block; margin-bottom: 2px; }
+  .preset-btn .persona-desc { font-size: 0.76rem; color: #64748b; }
+
+  /* ─── 要件サマリー ─── */
+  .req-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-bottom: 5px;
+    font-size: 0.8rem;
+  }
+  .req-label {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #475569;
+    width: 68px;
+    font-size: 0.75rem;
+  }
+  .req-value { color: #1e293b; font-size: 0.8rem; }
+  .req-missing { color: #94a3b8; font-style: italic; font-size: 0.76rem; }
+  .complete-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #dcfce7;
+    color: #166534;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .incomplete-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #fef9c3;
+    color: #92400e;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  /* ─── チャットエリア ─── */
+  .chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  #chat-messages {
+    flex: 1;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    padding: 20px;
+    overflow-y: auto;
+    min-height: 460px;
+    max-height: 600px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ─── メッセージバブル ─── */
+  .message { display: flex; gap: 10px; animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .message.user { flex-direction: row-reverse; }
+  .message .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .message.ai .avatar { background: #e8f0fa; }
+  .message.user .avatar { background: #e0f2fe; }
+
+  .bubble {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: #1e293b;
+  }
+  .message.ai .bubble { background: #f1f5f9; border-bottom-left-radius: 4px; }
+  .message.user .bubble { background: #2563a8; color: #fff; border-bottom-right-radius: 4px; }
+  .bubble a { color: #3b82f6; }
+  .message.user .bubble a { color: #bfdbfe; }
+
+  /* ─── 間取り案カード ─── */
+  .plans-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .plan-card {
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .plan-card:hover { border-color: #2563a8; box-shadow: 0 2px 8px rgba(37,99,168,0.12); }
+  .plan-concept {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    background: #2563a8;
+    padding: 3px 8px;
+    border-radius: 5px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+  .plan-area { font-size: 0.78rem; color: #64748b; margin-bottom: 4px; }
+  .plan-cost {
+    font-size: 0.76rem;
+    background: #fef3c7;
+    color: #92400e;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 6px;
+  }
+  .room-list { font-size: 0.76rem; color: #475569; }
+  .room-list li { list-style: none; padding: 1px 0; }
+  .room-list li::before { content: "▸ "; color: #94a3b8; }
+  .plan-note { font-size: 0.74rem; color: #94a3b8; margin-top: 6px; font-style: italic; }
+
+  /* ─── タイピングインジケーター ─── */
+  .typing { display: flex; align-items: center; gap: 5px; padding: 4px 0; }
+  .typing span {
+    width: 7px; height: 7px;
+    background: #94a3b8;
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,60%,100%{ transform: translateY(0); } 30%{ transform: translateY(-6px); } }
+
+  /* ─── 入力欄 ─── */
+  .input-area {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    align-items: flex-end;
+  }
+  #user-input {
+    flex: 1;
+    padding: 11px 16px;
+    border: 1.5px solid #d1dfe8;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    min-height: 44px;
+    max-height: 120px;
+    transition: border-color 0.15s;
+    line-height: 1.5;
+  }
+  #user-input:focus { border-color: #2563a8; box-shadow: 0 0 0 3px rgba(37,99,168,0.1); }
+  #send-btn {
+    padding: 11px 20px;
+    background: #2563a8;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.15s;
+    white-space: nowrap;
+    height: 44px;
+  }
+  #send-btn:hover:not(:disabled) { background: #1a4a7a; }
+  #send-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+  /* ─── 免責バナー ─── */
+  .disclaimer {
+    font-size: 0.73rem;
+    color: #94a3b8;
+    text-align: center;
+    padding: 6px 0 2px;
+  }
+
+  /* ─── 送客バナー ─── */
+  .cta-banner {
+    background: linear-gradient(135deg, #1a4a7a, #2563a8);
+    color: #fff;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-top: 12px;
+  }
+  .cta-banner h3 { font-size: 0.9rem; margin-bottom: 6px; }
+  .cta-banner p { font-size: 0.8rem; opacity: 0.9; margin-bottom: 12px; }
+  .maker-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .maker-chip {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 16px;
+    font-size: 0.76rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .maker-chip:hover { background: rgba(255,255,255,0.28); }
+
+  /* ─── ユーティリティ ─── */
+  .hidden { display: none !important; }
+  .new-session-btn {
+    display: inline-block;
+    padding: 7px 14px;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1.5px solid #d1dfe8;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    width: 100%;
+    text-align: center;
+  }
+  .new-session-btn:hover { background: #e2e8f0; }
+
+  /* ─── markdown 簡易スタイル ─── */
+  .bubble strong { font-weight: 700; }
+  .bubble em { font-style: italic; }
+  .bubble h3 { font-size: 0.9rem; margin: 8px 0 4px; color: #1a4a7a; }
+  .bubble blockquote { border-left: 3px solid #d1dfe8; padding-left: 8px; color: #64748b; margin: 6px 0; font-size: 0.82rem; }
+  .bubble ul, .bubble ol { padding-left: 1.2em; margin: 4px 0; }
+  .bubble li { margin-bottom: 2px; }
+  .bubble code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 0.82em; }
+  .bubble hr { border: none; border-top: 1px solid #e2e8f0; margin: 8px 0; }
+
+  /* ─── 右カラム（間取り表示パネル） ─── */
+  .right-panel { width: 220px; flex-shrink: 0; }
+  @media (max-width: 900px) { .right-panel { display: none; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏠 スマイエージェント</h1>
+  <span class="badge">AI住宅コンシェルジュ · MVP Demo</span>
+</header>
+
+<main>
+  <!-- ─── 左サイドバー ─── -->
+  <aside class="sidebar">
+    <!-- デモプリセット -->
+    <div class="card">
+      <h2>デモシナリオ</h2>
+      <div id="preset-list">
+        <p style="font-size:0.78rem;color:#94a3b8;">読み込み中…</p>
+      </div>
+    </div>
+
+    <!-- 住宅要件書 -->
+    <div class="card">
+      <h2>住宅要件書</h2>
+      <div id="requirements-panel">
+        <p style="font-size:0.78rem;color:#94a3b8;">ヒアリング前</p>
+      </div>
+    </div>
+
+    <!-- セッションリセット -->
+    <button class="new-session-btn" id="new-session-btn">🔄 新しいセッションを開始</button>
+  </aside>
+
+  <!-- ─── チャットエリア ─── -->
+  <div class="chat-container">
+    <div id="chat-messages">
+      <!-- ウェルカムメッセージ -->
+      <div class="message ai">
+        <div class="avatar">🏠</div>
+        <div class="bubble">
+          <strong>こんにちは！スマイエージェントです。</strong><br><br>
+          住まいづくりのご相談を、AIがお手伝いします。<br><br>
+          ご要望をお気軽にお話しください。家族構成・ご予算・土地の有無・希望の広さなどを教えていただければ、<strong>コンセプトの異なる3つの間取り案</strong>をご提案します！<br><br>
+          左のパネルから「デモシナリオ」を選ぶと、サンプルで試すこともできます。
+        </div>
+      </div>
+    </div>
+
+    <!-- 間取り案表示エリア -->
+    <div id="plans-container" class="hidden" style="margin-top:10px;"></div>
+
+    <!-- 送客バナー -->
+    <div id="cta-banner" class="cta-banner hidden">
+      <h3>📋 ハウスメーカーへの相談・来場予約</h3>
+      <p>ご提案した間取り案を持参すれば、商談がスムーズになります。まずは気になるメーカーを確認してみましょう。</p>
+      <div id="maker-chips" class="maker-chips"></div>
+    </div>
+
+    <!-- 入力エリア -->
+    <div class="input-area">
+      <textarea
+        id="user-input"
+        placeholder="ご要望をご自由にお話しください…（Shift+Enterで改行、Enterで送信）"
+        rows="1"
+      ></textarea>
+      <button id="send-btn">送信 ▶</button>
+    </div>
+
+    <div class="disclaimer">
+      ⚠️ 本サービスはAIによる概算・参考情報です。詳細設計・法規確認・正確な見積は建築士・ハウスメーカーにご相談ください。
+    </div>
+  </div>
+
+  <!-- ─── 右パネル ─── -->
+  <aside class="right-panel">
+    <div class="card">
+      <h2>フロー</h2>
+      <div id="flow-indicator" style="font-size:0.78rem;color:#475569;">
+        <div id="step-hearing" style="padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;">
+          ① ヒアリング
+        </div>
+        <div id="step-planning" style="padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;">
+          ② 間取り生成
+        </div>
+        <div id="step-followup" style="padding:6px 8px;border-radius:6px;color:#94a3b8;">
+          ③ 送客
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="phase2-card">
+      <h2>Phase 2 予定</h2>
+      <div style="font-size:0.76rem;color:#94a3b8;line-height:1.7;">
+        ④ 概算見積AI<br>
+        ⑤ 法規チェックAI<br>
+        ⑥ メーカー推薦AI<br>
+        ⑦ 来場予約連携
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+// ─── 状態管理 ─────────────────────────────────────────────
+let sessionId = generateSessionId();
+let isLoading = false;
+
+function generateSessionId() {
+  return 'session-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+// ─── API ─────────────────────────────────────────────────
+const API_BASE = window.location.origin + '/api';
+
+async function sendMessage(message) {
+  const res = await fetch(`${API_BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, message }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function loadPresets() {
+  try {
+    const res = await fetch(`${API_BASE}/demo-presets`);
+    const data = await res.json();
+    renderPresets(data.presets || []);
+  } catch (e) {
+    document.getElementById('preset-list').innerHTML =
+      '<p style="font-size:0.76rem;color:#ef4444;">取得失敗</p>';
+  }
+}
+
+async function loadMakers() {
+  try {
+    const res = await fetch(`${API_BASE}/makers`);
+    const data = await res.json();
+    return data.makers || [];
+  } catch { return []; }
+}
+
+// ─── UI ユーティリティ ─────────────────────────────────────
+function renderPresets(presets) {
+  const el = document.getElementById('preset-list');
+  el.innerHTML = presets.map((p, i) =>
+    `<button class="preset-btn" data-index="${i}">
+      <span class="persona-name">${p.name}</span>
+      <span class="persona-desc">${p.description}</span>
+    </button>`
+  ).join('');
+  el.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.index);
+      const preset = presets[idx];
+      const input = document.getElementById('user-input');
+      input.value = preset.preset_message;
+      autoResize(input);
+      input.focus();
+    });
+  });
+}
+
+// Markdown 簡易レンダラー
+function renderMarkdown(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^---+$/gm, '<hr>')
+    .replace(/\n/g, '<br>');
+}
+
+function appendMessage(role, content, isHtml = false) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `message ${role === 'user' ? 'user' : 'ai'}`;
+  const avatar = role === 'user' ? '👤' : '🏠';
+  const text = isHtml ? content : renderMarkdown(content);
+  div.innerHTML = `
+    <div class="avatar">${avatar}</div>
+    <div class="bubble">${text}</div>
+  `;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function showTyping() {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'message ai';
+  div.id = 'typing-indicator';
+  div.innerHTML = `
+    <div class="avatar">🏠</div>
+    <div class="bubble">
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div>
+  `;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTyping() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function updateRequirementsPanel(req) {
+  if (!req) return;
+  const el = document.getElementById('requirements-panel');
+  const badge = req.is_complete
+    ? `<span class="complete-badge">✅ ヒアリング完了</span>`
+    : `<span class="incomplete-badge">⏳ ヒアリング中</span>`;
+
+  const fields = [
+    { label: '家族構成', key: 'family_structure' },
+    { label: '予算', key: 'budget' },
+    { label: '土地', key: 'land_info' },
+    { label: '希望の広さ', key: 'desired_size' },
+    { label: 'デザイン', key: 'preferred_design' },
+    { label: '動線', key: 'lifestyle_flow' },
+    { label: '収納', key: 'storage_needs' },
+    { label: 'その他', key: 'notes' },
+  ];
+
+  const rows = fields.map(f => {
+    const val = req[f.key];
+    return `<div class="req-item">
+      <span class="req-label">${f.label}</span>
+      <span class="${val ? 'req-value' : 'req-missing'}">${val || '未入力'}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = badge + rows;
+}
+
+function renderPlans(plans) {
+  if (!plans || plans.length === 0) return;
+  const container = document.getElementById('plans-container');
+  container.classList.remove('hidden');
+
+  const html = `
+    <div class="card" style="padding:14px;">
+      <h2 style="font-size:0.82rem;font-weight:700;color:#1a4a7a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e8f0fa;">
+        ✨ 間取り提案 ${plans.length}案
+      </h2>
+      <div class="plans-grid">
+        ${plans.map((plan, i) => `
+          <div class="plan-card">
+            <span class="plan-concept">案${i+1}：${escHtml(plan.concept)}</span>
+            <div class="plan-area">📐 ${escHtml(plan.total_floor_area)} · ${escHtml(plan.floors)}</div>
+            ${plan.estimated_cost ? `<div class="plan-cost">💴 ${escHtml(plan.estimated_cost)}</div>` : ''}
+            <ul class="room-list">
+              ${plan.rooms.slice(0, 6).map(r =>
+                `<li>${escHtml(r.name)}（${escHtml(r.area)}）${r.note ? ' <span style="color:#94a3b8;font-size:.72rem">— '+escHtml(r.note)+'</span>' : ''}</li>`
+              ).join('')}
+              ${plan.rooms.length > 6 ? `<li style="color:#94a3b8">他${plan.rooms.length-6}室…</li>` : ''}
+            </ul>
+            <div class="plan-note">${escHtml(plan.rationale)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  container.innerHTML = html;
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function updateFlowStep(stage) {
+  const steps = { hearing: 'step-hearing', planning: 'step-planning', follow_up: 'step-followup' };
+  const active = '#e8f0fa';
+  const done = '#dcfce7';
+  const inactiveColor = '#94a3b8';
+
+  document.getElementById('step-hearing').style.cssText = '';
+  document.getElementById('step-planning').style.cssText = '';
+  document.getElementById('step-followup').style.cssText = '';
+
+  if (stage === 'hearing') {
+    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;';
+    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;';
+    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;';
+  } else if (stage === 'planning') {
+    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
+    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;';
+    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;';
+  } else if (stage === 'follow_up') {
+    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
+    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
+    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;';
+  }
+}
+
+async function showCtaBanner() {
+  const makers = await loadMakers();
+  const banner = document.getElementById('cta-banner');
+  const chips = document.getElementById('maker-chips');
+  chips.innerHTML = makers.map(m =>
+    `<span class="maker-chip" title="${escHtml(m.price_band)}">${escHtml(m.name)}</span>`
+  ).join('');
+  banner.classList.remove('hidden');
+}
+
+// ─── 送信処理 ─────────────────────────────────────────────
+async function handleSend() {
+  const input = document.getElementById('user-input');
+  const message = input.value.trim();
+  if (!message || isLoading) return;
+
+  input.value = '';
+  autoResize(input);
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+
+  appendMessage('user', message);
+  showTyping();
+
+  try {
+    const data = await sendMessage(message);
+    removeTyping();
+
+    if (data.reply) {
+      appendMessage('ai', data.reply);
+    }
+    if (data.requirements) {
+      updateRequirementsPanel(data.requirements);
+    }
+    if (data.floor_plans && data.floor_plans.length > 0) {
+      renderPlans(data.floor_plans);
+    }
+    if (data.done) {
+      updateFlowStep('follow_up');
+      showCtaBanner();
+    } else {
+      updateFlowStep(data.stage || 'hearing');
+    }
+  } catch (e) {
+    removeTyping();
+    appendMessage('ai', `⚠️ エラーが発生しました: ${e.message}\n\nしばらく待ってから再試行してください。`);
+  } finally {
+    isLoading = false;
+    document.getElementById('send-btn').disabled = false;
+    input.focus();
+  }
+}
+
+// ─── テキストエリア自動リサイズ ──────────────────────────────
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ─── イベントリスナー ────────────────────────────────────────
+document.getElementById('send-btn').addEventListener('click', handleSend);
+document.getElementById('user-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSend();
+  }
+});
+document.getElementById('user-input').addEventListener('input', (e) => autoResize(e.target));
+
+document.getElementById('new-session-btn').addEventListener('click', () => {
+  sessionId = generateSessionId();
+  document.getElementById('chat-messages').innerHTML = `
+    <div class="message ai">
+      <div class="avatar">🏠</div>
+      <div class="bubble">
+        <strong>新しいセッションを開始しました。</strong><br><br>
+        ご要望をお気軽にお話しください。
+      </div>
+    </div>
+  `;
+  document.getElementById('requirements-panel').innerHTML = '<p style="font-size:0.78rem;color:#94a3b8;">ヒアリング前</p>';
+  document.getElementById('plans-container').classList.add('hidden');
+  document.getElementById('plans-container').innerHTML = '';
+  document.getElementById('cta-banner').classList.add('hidden');
+  updateFlowStep('hearing');
+});
+
+// ─── 初期化 ─────────────────────────────────────────────────
+loadPresets();
+</script>
+</body>
+</html>
