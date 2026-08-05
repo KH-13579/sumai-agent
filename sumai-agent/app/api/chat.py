@@ -4,14 +4,22 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 
-from app.schemas.models import ChatRequest, ChatResponse
+from app.schemas.chat import ChatRequest, ChatResponse
 from app.agents.orchestrator import build_graph
 from app.data.demo_data import DEMO_PRESETS, DEMO_MAKERS
 
 router = APIRouter()
 
-# グラフをモジュールロード時に一度だけ初期化
-_graph, _memory = build_graph()
+# グラフは初回リクエスト時に遅延初期化する（インポート時にOllama接続を発生させないため）
+_graph = None
+_memory = None
+
+
+def _get_graph():
+    global _graph, _memory
+    if _graph is None:
+        _graph, _memory = build_graph()
+    return _graph
 
 
 @router.get("/health")
@@ -26,17 +34,14 @@ async def chat(req: ChatRequest):
         raise HTTPException(status_code=400, detail="メッセージが空です")
 
     config = {"configurable": {"thread_id": req.session_id}}
+    graph = _get_graph()
 
     try:
-        result = _graph.invoke(
-            {
-                "messages": [HumanMessage(content=req.message)],
-                "requirements": None,
-                "floor_plans": None,
-                "stage": "hearing",
-                "reply": "",
-                "done": False,
-            },
+        # requirements/floor_plans/hearing_turns 等は明示的に渡さない。
+        # チェックポイント（MemorySaver）に蓄積された前回までの状態を
+        # 上書きしてしまうため、messages のみを差分として渡す。
+        result = graph.invoke(
+            {"messages": [HumanMessage(content=req.message)]},
             config=config,
         )
     except Exception as e:

@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import uuid
 from unittest.mock import patch, MagicMock
-from app.schemas.models import RequirementBaseline, HearingOutput, FloorPlan, Room, PlanningOutput
+from app.schemas.requirements import RequirementBaseline, HearingOutput
+from app.schemas.floorplan import FloorPlan, Room, PlanningOutput
 
 
 # ─── ヒアリングAI テスト ───────────────────────────

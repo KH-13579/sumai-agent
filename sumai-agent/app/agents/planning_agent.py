@@ -5,7 +5,8 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 
-from app.schemas.models import RequirementBaseline, FloorPlan, Room, PlanningOutput
+from app.schemas.requirements import RequirementBaseline
+from app.schemas.floorplan import FloorPlan, Room, PlanningOutput
 
 PLANNING_SYSTEM_PROMPT = """あなたは住宅設計の専門家AIです。
 ユーザーの住宅要件定義書をもとに、コンセプトの異なる3つの間取り案を提案します。
@@ -75,16 +76,22 @@ def run_planning(requirements: RequirementBaseline, llm: ChatOllama) -> Planning
         HumanMessage(content=req_summary),
     ]
 
-    response = llm.invoke(messages)
-    raw_text = response.content
+    # JSON解析に失敗した場合は1回だけリトライする
+    data = None
+    for _attempt in range(2):
+        response = llm.invoke(messages)
+        raw_text = response.content
+        try:
+            text = raw_text.strip()
+            if text.startswith("```"):
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1])
+            data = json.loads(text)
+            break
+        except json.JSONDecodeError:
+            data = None
 
-    try:
-        text = raw_text.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            text = "\n".join(lines[1:-1])
-        data = json.loads(text)
-    except json.JSONDecodeError:
+    if data is None:
         return PlanningOutput(
             plans=[],
             summary="間取り案の生成中にエラーが発生しました。もう一度お試しください。",

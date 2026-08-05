@@ -9,7 +9,8 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 
-from app.schemas.models import RequirementBaseline, FloorPlan, ChatResponse
+from app.schemas.requirements import RequirementBaseline
+from app.schemas.floorplan import FloorPlan
 from app.agents.hearing_agent import run_hearing
 from app.agents.planning_agent import run_planning
 
@@ -25,16 +26,85 @@ class SumaiState(TypedDict):
     stage: str            # "hearing" | "planning" | "follow_up"
     reply: str
     done: bool
+    hearing_turns: int
+
+
+# 間取り生成に必須の4項目（この4つが揃うまでヒアリングを続ける）
+REQUIRED_FIELDS = ["family_structure", "budget", "land_info", "desired_size"]
+
+# ヒアリングを続ける最大ターン数。これを超えたら未確定項目に仮定を入れて先に進む
+MAX_HEARING_TURNS = 3
+
+# 「ヒアリングを打ち切って提案してほしい」という明示的な意図を示す語句
+SKIP_KEYWORDS = [
+    "提案に移って", "提案してください", "提案をお願い", "提案して",
+    "スキップして", "そのまま提案", "進んでください", "間取りを見せて",
+    "間取り提案", "先に進んで",
+]
+
+# ヒアリングを打ち切った際、未確定項目に入れる仮定値（プランニングAIへの前提として渡す）
+FALLBACK_DEFAULTS = {
+    "family_structure": "家族構成未確認（標準的な家族構成として想定）",
+    "budget": "予算未確認（3,000万円台の標準プランとして想定）",
+    "land_info": "土地未定（30坪前後の一般的な整形地を想定）",
+    "desired_size": "広さ・部屋数未指定（3LDK・30坪前後を想定）",
+}
+
+
+def _merge_requirements(
+    old: Optional[RequirementBaseline], new: RequirementBaseline
+) -> RequirementBaseline:
+    """前回までの要件と今回の抽出結果を統合する（新しい値がnullなら旧値を保持）"""
+    if old is None:
+        merged_data = new.model_dump()
+    else:
+        merged_data = old.model_dump()
+        new_data = new.model_dump()
+        for field in RequirementBaseline.model_fields:
+            if field in ("is_complete", "missing_fields"):
+                continue
+            if new_data.get(field) is not None:
+                merged_data[field] = new_data[field]
+    merged = RequirementBaseline(**merged_data)
+    missing = [f for f in REQUIRED_FIELDS if getattr(merged, f) is None]
+    merged.missing_fields = missing
+    merged.is_complete = not missing
+    return merged
+
+
+def _apply_fallback_defaults(req: RequirementBaseline, missing: List[str]) -> RequirementBaseline:
+    """ヒアリング打ち切り時、未確定の必須項目に仮定値を補完する"""
+    data = req.model_dump()
+    for field in missing:
+        data[field] = FALLBACK_DEFAULTS[field]
+    data["missing_fields"] = []
+    data["is_complete"] = True
+    return RequirementBaseline(**data)
+
+
+def _wants_to_skip_hearing(message: str) -> bool:
+    return any(keyword in message for keyword in SKIP_KEYWORDS)
+
+
+def _last_human_message(messages: Sequence[BaseMessage]) -> str:
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            return str(msg.content)
+    return ""
 
 
 # ─────────────────────────────────────────
 # LLM 初期化
 # ─────────────────────────────────────────
 
-def _get_llm() -> ChatOllama:
-    model = os.getenv("SUMAI_MODEL", "qwen2.5:7b")
+def _get_llm(json_mode: bool = False) -> ChatOllama:
+    model = os.getenv("SUMAI_MODEL", "qwen2.5:14b")
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    return ChatOllama(model=model, base_url=base_url, num_predict=4096)
+    kwargs = {"model": model, "base_url": base_url, "num_predict": 4096}
+    if json_mode:
+        # ヒアリング/間取り生成はJSON応答が前提のため、Ollama側にJSON整形を強制させる
+        kwargs["format"] = "json"
+    return ChatOllama(**kwargs)
 
 
 # ─────────────────────────────────────────
@@ -71,30 +141,41 @@ def orchestrator_node(state: SumaiState) -> dict:
 
 def hearing_node(state: SumaiState) -> dict:
     """ヒアリングAIを実行して要件を構造化"""
-    llm = _get_llm()
-    result = run_hearing(state["messages"], llm)
-    req = result.requirements
+    llm = _get_llm(json_mode=True)
+    prev_req = state.get("requirements")
+    turns = state.get("hearing_turns", 0) + 1
 
-    if req.is_complete:
+    result = run_hearing(state["messages"], llm, known_requirements=prev_req)
+    merged = _merge_requirements(prev_req, result.requirements)
+    missing = merged.missing_fields
+
+    skip_requested = _wants_to_skip_hearing(_last_human_message(state["messages"]))
+    should_proceed = not missing or skip_requested or turns >= MAX_HEARING_TURNS
+
+    if should_proceed:
+        if missing:
+            merged = _apply_fallback_defaults(merged, missing)
         return {
-            "requirements": req,
+            "requirements": merged,
             "stage": "planning",
             "reply": "",
+            "hearing_turns": turns,
             "done": False,
         }
     else:
         question = result.follow_up_question or "もう少し詳しく教えていただけますか？"
         return {
-            "requirements": req,
+            "requirements": merged,
             "stage": "hearing",
             "reply": question,
+            "hearing_turns": turns,
             "done": False,
         }
 
 
 def planning_node(state: SumaiState) -> dict:
     """間取り生成AIを実行して3案を生成"""
-    llm = _get_llm()
+    llm = _get_llm(json_mode=True)
     result = run_planning(state["requirements"], llm)
 
     # 自然言語応答の生成

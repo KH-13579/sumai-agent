@@ -5,7 +5,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 
-from app.schemas.models import RequirementBaseline, HearingOutput
+from app.schemas.requirements import RequirementBaseline, HearingOutput
 
 HEARING_SYSTEM_PROMPT = """あなたは住宅の専門的なヒアリングAIです。
 ユーザーの住宅購入・建設の要望を丁寧に深掘りし、設計に必要な要件を構造化します。
@@ -40,30 +40,74 @@ HEARING_SYSTEM_PROMPT = """あなたは住宅の専門的なヒアリングAIで
   "follow_up_question": "（is_complete=falseの場合のみ。1〜2項目に絞った追質問文。is_complete=trueの場合はnull）"
 }
 
+## 既知情報・未定回答の扱い（重要）
+- 「現在判明している情報」として提示された項目は、ユーザーが新しい情報を言わない限り値を維持し、再度質問しない
+- ユーザーが「未定」「わからない」「まだ」「決めていない」等と回答した項目は、値をnullに戻さず、文字列 "未定" として記録する（＝聞いた上での未定回答も取得済みとして扱う）
+- 同じ項目について、直前までに追質問済みであれば繰り返し聞かない
+
 ## 注意事項
 - 必ず有効なJSONのみを返す（前後に余分なテキストは不要）
 - 親しみやすく、分かりやすい日本語で質問する
 - ユーザーが不安にならないよう、専門用語は避ける
 """
 
+_FIELD_LABELS = {
+    "family_structure": "家族構成",
+    "budget": "予算",
+    "land_info": "土地の有無・場所",
+    "preferred_design": "好みのデザイン",
+    "desired_size": "希望の広さ・部屋数",
+    "lifestyle_flow": "重視する生活動線",
+    "storage_needs": "収納の希望",
+    "notes": "その他の要望",
+}
 
-def run_hearing(conversation_history: list, llm: ChatOllama) -> HearingOutput:
+
+def _format_known_requirements(known: RequirementBaseline | None) -> str:
+    """既知の要件をプロンプト注入用のテキストに整形する"""
+    if known is None:
+        return ""
+    lines = []
+    for field, label in _FIELD_LABELS.items():
+        value = getattr(known, field, None)
+        if value is not None:
+            lines.append(f"- {label}: {value}")
+    return "\n".join(lines)
+
+
+def run_hearing(
+    conversation_history: list,
+    llm: ChatOllama,
+    known_requirements: RequirementBaseline | None = None,
+) -> HearingOutput:
     """会話履歴からヒアリングAIを実行し、要件を構造化する"""
-    messages = [SystemMessage(content=HEARING_SYSTEM_PROMPT)] + conversation_history
+    system_content = HEARING_SYSTEM_PROMPT
+    known_summary = _format_known_requirements(known_requirements)
+    if known_summary:
+        system_content += (
+            "\n\n## 現在判明している情報（再度聞かないこと）\n" + known_summary
+        )
 
-    response = llm.invoke(messages)
-    raw_text = response.content
+    messages = [SystemMessage(content=system_content)] + conversation_history
 
-    # JSON抽出
-    try:
-        # コードブロックの除去
-        text = raw_text.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            text = "\n".join(lines[1:-1])
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        # フォールバック: 不完全なレスポンスへの対応
+    # JSON解析に失敗した場合は1回だけリトライする
+    data = None
+    for _attempt in range(2):
+        response = llm.invoke(messages)
+        raw_text = response.content
+        try:
+            # コードブロックの除去
+            text = raw_text.strip()
+            if text.startswith("```"):
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1])
+            data = json.loads(text)
+            break
+        except json.JSONDecodeError:
+            data = None
+
+    if data is None:
+        # フォールバック: リトライしても解析できない場合
         return HearingOutput(
             requirements=RequirementBaseline(
                 is_complete=False,
