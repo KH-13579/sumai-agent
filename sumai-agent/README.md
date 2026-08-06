@@ -29,13 +29,13 @@ copy .env.example .env
 cp .env.example .env
 ```
 
-`.env` の `SUMAI_MODEL` が実際に使用するモデル名です（既定値は `qwen2.5:7b`）。変更する場合はここを書き換えてください。
+`.env` の `SUMAI_MODEL` が実際に使用するモデル名です（既定値は `qwen2.5:14b`）。変更する場合はここを書き換えてください。
 
 ## Ollama モデルの取得
 
 ```bash
-# .env の SUMAI_MODEL に指定したモデルを取得（既定なら qwen2.5:7b）
-ollama pull qwen2.5:7b
+# .env の SUMAI_MODEL に指定したモデルを取得（既定なら qwen2.5:14b）
+ollama pull qwen2.5:14b
 
 # Ollama が起動していてモデルが取得済みか確認
 ollama list
