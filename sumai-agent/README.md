@@ -1,8 +1,11 @@
 # スマイエージェント — セットアップ & 起動手順
 
+マルチAIエージェント型 住宅意思決定支援サービス（モック）。
+LLMはローカルの Ollama を使用（外部APIキーは不要）。
+
 ## 必要なもの
 - Python 3.10 以上
-- Anthropic API キー（https://console.anthropic.com/）
+- [Ollama](https://ollama.com/)（ローカルで起動しておく）
 
 ## 初回セットアップ
 
@@ -10,19 +13,41 @@
 # 1. sumai-agent ディレクトリに移動
 cd sumai-agent
 
-# 2. 依存ライブラリのインストール
-pip install -r requirements.txt
+# 2. venv 作成
+python -m venv venv
 
-# 3. .env ファイルを作成（.env.example をコピーして編集）
+# 3. 依存ライブラリのインストール
+# Windows
+./venv/Scripts/python.exe -m pip install -r requirements.txt
+# macOS / Linux
+./venv/bin/python -m pip install -r requirements.txt
+
+# 4. .env ファイルを作成（.env.example をコピー）
+# Windows
 copy .env.example .env
-# .env を開き、ANTHROPIC_API_KEY=sk-ant-... を設定する
+# macOS / Linux
+cp .env.example .env
+```
+
+`.env` の `SUMAI_MODEL` が実際に使用するモデル名です（既定値は `qwen2.5:7b`）。変更する場合はここを書き換えてください。
+
+## Ollama モデルの取得
+
+```bash
+# .env の SUMAI_MODEL に指定したモデルを取得（既定なら qwen2.5:7b）
+ollama pull qwen2.5:7b
+
+# Ollama が起動していてモデルが取得済みか確認
+ollama list
 ```
 
 ## 起動
 
 ```bash
-# sumai-agent ディレクトリで実行
-python run.py
+# Windows
+./venv/Scripts/python.exe run.py
+# macOS / Linux
+./venv/bin/python run.py
 ```
 
 サーバー起動後、ブラウザで以下にアクセス：
@@ -45,7 +70,8 @@ http://localhost:8000
 ## テスト（LLM モック）
 
 ```bash
-python -m pytest tests/test_acceptance.py -v
+# Windows
+./venv/Scripts/python.exe -m pytest tests/test_acceptance.py -v
 ```
 
 ## 使い方
@@ -69,7 +95,10 @@ sumai-agent/
 │   ├── data/
 │   │   └── demo_data.py       # デモ用サンプルデータ
 │   ├── schemas/
-│   │   └── models.py          # Pydantic スキーマ
+│   │   ├── chat.py            # チャット関連スキーマ
+│   │   ├── floorplan.py       # 間取り関連スキーマ
+│   │   └── requirements.py    # 要件関連スキーマ
+│   ├── tools/                 # エージェント用ツール（今後拡張）
 │   └── main.py                # FastAPI アプリ本体
 ├── frontend/
 │   └── index.html             # チャット UI
