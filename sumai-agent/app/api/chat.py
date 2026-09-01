@@ -110,6 +110,7 @@ async def chat(req: ChatRequest):
         floor_plans=result.get("floor_plans"),
         site_info=result.get("site_info"),
         legal_checks=result.get("legal_checks"),
+        maker_recommendations=result.get("maker_recommendations"),
         stage=result.get("stage", "hearing"),
         done=result.get("done", False),
     )
