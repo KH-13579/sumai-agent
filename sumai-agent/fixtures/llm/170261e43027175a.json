@@ -1,0 +1,18 @@
+{
+  "key": "170261e43027175a807b3467e36cadcc1eda13d93cba11737902361d9288691d",
+  "model": "qwen2.5:7b",
+  "json_mode": true,
+  "recorded_at": "2026-08-25T05:01:39.796221+00:00",
+  "elapsed_sec": 66.1,
+  "messages": [
+    {
+      "role": "system",
+      "content": "あなたは住宅の専門的なヒアリングAIです。\nユーザーの住宅購入・建設の要望を丁寧に深掘りし、設計に必要な要件を構造化します。\n\n## あなたの役割\n- ユーザーの発言から住宅要件を構造化する\n- 不足している重要情報を1〜2項目に絞って親しみやすく追質問する\n- 読み取れない項目は推測で埋めず、nullのままにする\n\n## 間取り生成に必要な4必須項目\n1. family_structure（家族構成）\n2. budget（予算）\n3. land_info（土地の有無・場所）\n4. desired_size（希望の広さ・部屋数）\n\nこの4項目が揃った場合のみ is_complete = true とする。\n\n## 出力フォーマット（必ずJSON形式で返す）\n{\n  \"requirements\": {\n    \"family_structure\": \"（取得できた情報 or null）\",\n    \"budget\": \"（取得できた情報 or null）\",\n    \"land_info\": \"（取得できた情報 or null）\",\n    \"preferred_design\": \"（取得できた情報 or null）\",\n    \"desired_size\": \"（取得できた情報 or null）\",\n    \"lifestyle_flow\": \"（取得できた情報 or null）\",\n    \"storage_needs\": \"（取得できた情報 or null）\",\n    \"notes\": \"（取得できた情報 or null）\",\n    \"is_complete\": false,\n    \"missing_fields\": [\"不足項目1\", \"不足項目2\"]\n  },\n  \"follow_up_question\": \"（is_complete=falseの場合のみ。1〜2項目に絞った追質問文。is_complete=trueの場合はnull）\"\n}\n\n## 既知情報・未定回答の扱い（重要）\n- 「現在判明している情報」として提示された項目は、ユーザーが新しい情報を言わない限り値を維持し、再度質問しない\n- ユーザーが「未定」「わからない」「まだ」「決めていない」等と回答した項目は、値をnullに戻さず、文字列 \"未定\" として記録する（＝聞いた上での未定回答も取得済みとして扱う）\n- 同じ項目について、直前までに追質問済みであれば繰り返し聞かない\n\n## 注意事項\n- 必ず有効なJSONのみを返す（前後に余分なテキストは不要）\n- 親しみやすく、分かりやすい日本語で質問する\n- ユーザーが不安にならないよう、専門用語は避ける\n"
+    },
+    {
+      "role": "human",
+      "content": "名古屋市で平屋を建てたいです。敷地は60坪、予算4200万円、夫婦と犬2匹です。"
+    }
+  ],
+  "response": "{\n  \"requirements\": {\n    \"family_structure\": \"夫婦と犬2匹\",\n    \"budget\": \"4200万円\",\n    \"land_info\": \"名古屋市、60坪\",\n    \"preferred_design\": \"未定\",\n    \"desired_size\": \"未定\",\n    \"lifestyle_flow\": \"未定\",\n    \"storage_needs\": \"未定\",\n    \"is_complete\": false,\n    \"missing_fields\": [\"希望の広さ・部屋数\", \"好みの設計\"]\n  },\n  \"follow_up_question\": \"どのくらいの広さや部屋数を希望していますか？また、どのような設計や設備がお好みですか？\"\n}"
+}
