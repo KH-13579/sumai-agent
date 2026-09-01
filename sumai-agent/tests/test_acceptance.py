@@ -57,57 +57,75 @@ def make_mock_llm_hearing_complete():
 
 
 def make_mock_llm_planning():
-    """間取り生成AIレスポンスをモック"""
-    mock = MagicMock()
-    mock.invoke.return_value = MagicMock(
-        content=json.dumps({
-            "plans": [
-                {
-                    "concept": "コスパ重視案",
-                    "total_floor_area": "約100㎡（約30坪）",
-                    "floors": "2階建て",
-                    "rooms": [
-                        {"name": "LDK", "area": "18畳", "note": "南向き"},
-                        {"name": "主寝室", "area": "8畳", "note": None},
-                        {"name": "子供部屋", "area": "6畳", "note": None},
-                        {"name": "浴室・洗面", "area": "標準", "note": None}
-                    ],
-                    "layout_description": "1階にLDK、2階に寝室・子供部屋。シンプルな動線。",
-                    "rationale": "予算内で実現しやすいスタンダード設計。",
-                    "estimated_cost": "2,400〜2,800万円"
-                },
-                {
-                    "concept": "広さ重視案",
-                    "total_floor_area": "約120㎡（約36坪）",
-                    "floors": "2階建て",
-                    "rooms": [
-                        {"name": "LDK", "area": "24畳", "note": "吹き抜け"},
-                        {"name": "主寝室", "area": "10畳", "note": None},
-                        {"name": "子供部屋", "area": "8畳", "note": None},
-                        {"name": "浴室・洗面", "area": "標準", "note": None}
-                    ],
-                    "layout_description": "LDKを最大化。吹き抜けで開放感。",
-                    "rationale": "リビングを広くしたいご要望に最適。",
-                    "estimated_cost": "2,900〜3,400万円"
-                },
-                {
-                    "concept": "収納重視案",
-                    "total_floor_area": "約110㎡（約33坪）",
-                    "floors": "2階建て",
-                    "rooms": [
-                        {"name": "LDK", "area": "20畳", "note": "パントリー付き"},
-                        {"name": "主寝室", "area": "8畳", "note": "WIC付き"},
-                        {"name": "子供部屋", "area": "7畳", "note": None},
-                        {"name": "収納室", "area": "4畳", "note": "大型収納"}
-                    ],
-                    "layout_description": "各所に収納を配置。家事効率を重視。",
-                    "rationale": "収納多めのご要望に応えた設計。",
-                    "estimated_cost": "2,700〜3,200万円"
-                }
+    """間取り生成AIレスポンスをモック（with_structured_output対応）
+
+    run_planningはllm.with_structured_output(_LLMPlanningOutput)を呼ぶため、
+    mock.invoke ではなく mock.with_structured_output(...).invoke を仕込む。
+    座標(geometry)はモック不要 — 決定論エンジンがこのテスト実行時に実際に計算する。
+    """
+    from app.agents.planning_agent import _LLMFloorPlan, _LLMPlanningOutput, _LLMRoom
+
+    def _room(name, area_m2, room_type, floor=1, note=None):
+        return _LLMRoom(name=name, note=note, room_type=room_type, area_m2=area_m2, floor=floor)
+
+    plans = [
+        _LLMFloorPlan(
+            concept="コスパ重視案",
+            total_floor_area="約100㎡（約30坪）",
+            floors="2階建て",
+            rooms=[
+                _room("LDK", 29.8, "LDK", floor=1),
+                _room("和室", 9.9, "和室", floor=1),
+                _room("主寝室", 13.2, "主寝室", floor=2),
+                _room("子供部屋", 9.9, "子供部屋", floor=2),
             ],
-            "summary": "3案ともご予算内で実現可能です。広さ重視案はリビングの開放感が最大、収納重視案は日常の整理整頓が楽になります。"
-        })
+            layout_description="1階にLDK・和室、2階に主寝室・子供部屋。シンプルな動線。",
+            rationale="予算内で実現しやすいスタンダード設計。",
+            estimated_cost="2,400〜2,800万円",
+        ),
+        _LLMFloorPlan(
+            concept="広さ重視案",
+            total_floor_area="約120㎡（約36坪）",
+            floors="2階建て",
+            rooms=[
+                _room("LDK", 39.7, "LDK", floor=1),
+                _room("洗面脱衣", 5.0, "洗面脱衣", floor=1),
+                _room("主寝室", 16.6, "主寝室", floor=2),
+                _room("子供部屋", 13.2, "子供部屋", floor=2),
+            ],
+            layout_description="LDKを最大化。吹き抜けで開放感。",
+            rationale="リビングを広くしたいご要望に最適。",
+            estimated_cost="2,900〜3,400万円",
+        ),
+        _LLMFloorPlan(
+            concept="収納重視案",
+            total_floor_area="約110㎡（約33坪）",
+            floors="2階建て",
+            rooms=[
+                _room("LDK", 33.1, "LDK", floor=1),
+                _room("収納", 3.3, "収納", floor=1),
+                _room("主寝室", 13.2, "主寝室", floor=2),
+                _room("WIC", 5.0, "WIC", floor=2),
+                _room("子供部屋", 11.6, "子供部屋", floor=2),
+            ],
+            layout_description="各所に収納を配置。家事効率を重視。",
+            rationale="収納多めのご要望に応えた設計。",
+            estimated_cost="2,700〜3,200万円",
+        ),
+    ]
+    structured_output = _LLMPlanningOutput(
+        plans=plans,
+        summary="3案ともご予算内で実現可能です。広さ重視案はリビングの開放感が最大、収納重視案は日常の整理整頓が楽になります。",
     )
+
+    mock = MagicMock()
+    # with_structured_output(..., include_raw=True) は
+    # {"raw": AIMessage, "parsed": BaseModel, "parsing_error": None} を返す
+    mock.with_structured_output.return_value.invoke.return_value = {
+        "raw": MagicMock(content=""),
+        "parsed": structured_output,
+        "parsing_error": None,
+    }
     return mock
 
 
@@ -146,6 +164,14 @@ def test_ac2_planning_generates_3_plans_when_complete():
 
     assert len(result.plans) == 3
     concepts = [p.concept for p in result.plans]
+
+    # 座標(geometry)は決定論エンジンが実際に計算する（LLMモック不要）
+    for plan in result.plans:
+        assert plan.geometry is not None
+        assert plan.check is not None
+        assert plan.check.overlaps == []
+        assert plan.check.fill_rate_pct == 100.0
+
     print(f"✅ AC-2 PASS: 間取り3案生成 = {concepts}")
 
 

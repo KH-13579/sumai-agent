@@ -229,6 +229,35 @@
   .room-list li::before { content: "▸ "; color: #94a3b8; }
   .plan-note { font-size: 0.74rem; color: #94a3b8; margin-top: 6px; font-style: italic; }
 
+  /* ─── 間取り図（SVG） ─── */
+  .floorplan-tabs { display: flex; gap: 4px; margin-top: 10px; }
+  .floorplan-tab {
+    font-size: 0.72rem;
+    padding: 3px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #f8fafc;
+    color: #475569;
+    cursor: pointer;
+  }
+  .floorplan-tab.active { background: #2563a8; color: #fff; border-color: #2563a8; }
+  .floorplan-img-wrap {
+    margin-top: 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: auto;
+    background: #fff;
+  }
+  .floorplan-img { display: block; max-width: 100%; height: auto; }
+  .artifact-link {
+    font-size: 0.76rem;
+    color: #2563a8;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+  .artifact-link:hover { text-decoration: underline; }
+
   /* ─── タイピングインジケーター ─── */
   .typing { display: flex; align-items: center; gap: 5px; padding: 4px 0; }
   .typing span {
@@ -782,11 +811,14 @@ function renderPlans(plans) {
   const container = document.getElementById('plans-container');
   container.classList.remove('hidden');
 
+  const hasGeometry = plans.some(p => p.geometry);
+
   const html = `
     <div class="card" style="padding:14px;">
       <h2 style="font-size:0.82rem;font-weight:700;color:#1a4a7a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e8f0fa;">
         ✨ 間取り提案 ${plans.length}案
       </h2>
+      ${hasGeometry ? `<a class="artifact-link" href="${API_BASE}/artifact/${sessionId}/download" target="_blank" rel="noopener">📄 アーティファクト(JSON)をダウンロード</a>` : ''}
       <div class="plans-grid">
         ${plans.map((plan, i) => `
           <div class="plan-card">
@@ -800,12 +832,43 @@ function renderPlans(plans) {
               ${plan.rooms.length > 6 ? `<li style="color:#94a3b8">他${plan.rooms.length-6}室…</li>` : ''}
             </ul>
             <div class="plan-note">${escHtml(plan.rationale)}</div>
+            ${plan.geometry ? renderFloorPlanBlock(plan, i) : ''}
           </div>
         `).join('')}
       </div>
     </div>
   `;
   container.innerHTML = html;
+
+  plans.forEach((plan, i) => {
+    if (plan.geometry && plan.geometry.floors.length > 0) {
+      showFloorPlan(i, plan.geometry.floors[0].floor);
+    }
+  });
+}
+
+function renderFloorPlanBlock(plan, planIndex) {
+  const floors = plan.geometry.floors.map(f => f.floor);
+  return `
+    <div class="floorplan-tabs" id="floorplan-tabs-${planIndex}">
+      ${floors.map(f => `<button class="floorplan-tab" onclick="showFloorPlan(${planIndex}, ${f})">${f}F</button>`).join('')}
+    </div>
+    <div class="floorplan-img-wrap">
+      <img class="floorplan-img" id="floorplan-img-${planIndex}" alt="間取り図（案${planIndex+1}）" />
+    </div>
+  `;
+}
+
+function showFloorPlan(planIndex, floor) {
+  const img = document.getElementById(`floorplan-img-${planIndex}`);
+  if (img) img.src = `${API_BASE}/plan-svg/${sessionId}/${planIndex}/${floor}`;
+
+  const tabsWrap = document.getElementById(`floorplan-tabs-${planIndex}`);
+  if (tabsWrap) {
+    tabsWrap.querySelectorAll('.floorplan-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.textContent === `${floor}F`);
+    });
+  }
 }
 
 function escHtml(str) {

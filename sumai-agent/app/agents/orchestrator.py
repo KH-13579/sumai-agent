@@ -181,6 +181,8 @@ def _legal_autofix_enabled() -> bool:
 # LLM 初期化
 # ─────────────────────────────────────────
 
+def _get_llm(json_mode: bool = False) -> ChatOllama:
+    model = os.getenv("SUMAI_MODEL", "qwen2.5:3b")
 def _temperature() -> float:
     """生成のばらつきを抑える温度（NFR-01 デモ再現性）。不正値は既定値に戻す"""
     try:
@@ -330,6 +332,10 @@ def hearing_node(state: SumaiState) -> dict:
 
 
 def planning_node(state: SumaiState) -> dict:
+    """間取り生成AIを実行して3案を生成"""
+    # with_structured_output(method="json_schema")がJSON強制を担うため、
+    # ここでformat="json"を重ねて指定しない（衝突回避）
+    llm = _get_llm(json_mode=False)
     """間取り生成AIを実行して3案を生成（PLAN-1〜3）
 
     法規チェックからの修正指示（legal_constraints）が入っている場合は、

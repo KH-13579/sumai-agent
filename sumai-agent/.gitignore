@@ -6,6 +6,7 @@ __pycache__/
 
 # 仮想環境（README の手順では venv/ を作成する）
 venv/
+build/
 env/
 .venv/
 
