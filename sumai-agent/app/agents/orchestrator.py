@@ -11,8 +11,10 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from app.schemas.requirements import RequirementBaseline
 from app.schemas.floorplan import FloorPlan
+from app.schemas.maker import MakerRecommendation, MakerRecommendationOutput
 from app.agents.hearing_agent import run_hearing
 from app.agents.planning_agent import run_planning
+from app.agents.maker_agent import run_maker_recommendation
 
 
 # ─────────────────────────────────────────
@@ -23,7 +25,8 @@ class SumaiState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     requirements: Optional[RequirementBaseline]
     floor_plans: Optional[List[FloorPlan]]
-    stage: str            # "hearing" | "planning" | "follow_up"
+    maker_recommendations: Optional[List[MakerRecommendation]]
+    stage: str            # "hearing" | "planning" | "maker" | "follow_up"
     reply: str
     done: bool
     hearing_turns: int
@@ -97,10 +100,16 @@ def _last_human_message(messages: Sequence[BaseMessage]) -> str:
 # LLM 初期化
 # ─────────────────────────────────────────
 
-def _get_llm(json_mode: bool = False) -> ChatOllama:
-    model = os.getenv("SUMAI_MODEL", "qwen2.5:14b")
+def _get_llm(json_mode: bool = False, num_predict: int = 1024) -> ChatOllama:
+    model = os.getenv("SUMAI_MODEL", "qwen2.5:7b")
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    kwargs = {"model": model, "base_url": base_url, "num_predict": 4096}
+    temperature = float(os.getenv("SUMAI_TEMPERATURE", "0.3"))
+    kwargs = {
+        "model": model,
+        "base_url": base_url,
+        "num_predict": num_predict,
+        "temperature": temperature,
+    }
     if json_mode:
         # ヒアリング/間取り生成はJSON応答が前提のため、Ollama側にJSON整形を強制させる
         kwargs["format"] = "json"
@@ -113,12 +122,12 @@ def _get_llm(json_mode: bool = False) -> ChatOllama:
 
 def orchestrator_node(state: SumaiState) -> dict:
     """ルーティングとフォローアップ応答を担当"""
-    # 間取り生成済み → フォローアップ
-    if state.get("floor_plans"):
-        llm = _get_llm()
+    # メーカー推薦済み → フォローアップ
+    if state.get("maker_recommendations"):
+        llm = _get_llm(num_predict=512)
         system = SystemMessage(content=(
             "あなたは住宅AIコンシェルジュです。"
-            "すでに間取り案を提案した後のフォローアップ対話を行います。"
+            "間取り案とハウスメーカー推薦をすでに提案した後のフォローアップ対話を行います。"
             "ユーザーの質問や感想に丁寧に答え、必要に応じてハウスメーカーへの相談・来場予約を提案してください。"
             "「※本提案は概算・参考プランです。詳細は建築士・ハウスメーカーにご確認ください。」"
             "を文末に添えてください。"
@@ -131,6 +140,14 @@ def orchestrator_node(state: SumaiState) -> dict:
             "done": True,
         }
 
+    # 間取り生成済み・メーカー未推薦 → メーカー推薦フェーズへ
+    if state.get("floor_plans"):
+        return {
+            "stage": "maker",
+            "reply": "",
+            "done": False,
+        }
+
     # 未生成 → ヒアリングフェーズへ委譲
     return {
         "stage": "hearing",
@@ -141,7 +158,7 @@ def orchestrator_node(state: SumaiState) -> dict:
 
 def hearing_node(state: SumaiState) -> dict:
     """ヒアリングAIを実行して要件を構造化"""
-    llm = _get_llm(json_mode=True)
+    llm = _get_llm(json_mode=True, num_predict=512)
     prev_req = state.get("requirements")
     turns = state.get("hearing_turns", 0) + 1
 
@@ -175,7 +192,7 @@ def hearing_node(state: SumaiState) -> dict:
 
 def planning_node(state: SumaiState) -> dict:
     """間取り生成AIを実行して3案を生成"""
-    llm = _get_llm(json_mode=True)
+    llm = _get_llm(json_mode=True, num_predict=2048)
     result = run_planning(state["requirements"], llm)
 
     # 自然言語応答の生成
@@ -197,10 +214,50 @@ def planning_node(state: SumaiState) -> dict:
 
 > ⚠️ 本提案はAIによる概算・参考プランです。詳細な設計・法規確認・正確な見積は、建築士やハウスメーカーにご相談ください。
 
-気になる案はありましたか？変更したい点や追加の要望があれば、お気軽にお申し付けください。ハウスメーカーへの相談・来場予約のご案内もできます。"""
+続けて、あなたの要件に最適な**ハウスメーカー・サービス**をAIが分析します。少々お待ちください…"""
 
     return {
         "floor_plans": result.plans,
+        "stage": "maker",
+        "reply": reply,
+        "done": False,
+    }
+
+
+def maker_node(state: SumaiState) -> dict:
+    """メーカー推薦AIを実行してハウスメーカーを推薦する"""
+    llm = _get_llm(json_mode=True, num_predict=1024)
+    result = run_maker_recommendation(
+        state["requirements"],
+        state.get("floor_plans") or [],
+        llm,
+    )
+
+    # 自然言語応答の生成
+    rec_text = ""
+    for rec in result.recommendations:
+        type_label = "注文住宅メーカー" if rec.type == "builder" else "情報ポータル"
+        rec_text += f"\n\n### 第{rec.rank}位：{rec.name}（{type_label}）\n"
+        rec_text += f"**推薦理由：** {rec.reason}\n"
+        strengths_text = "、".join(rec.strengths[:3])
+        rec_text += f"- 強み：{strengths_text}\n"
+        rec_text += f"- 価格帯：{rec.price_band}\n"
+        if rec.caution:
+            rec_text += f"- ⚠️ 注意点：{rec.caution}\n"
+        rec_text += f"- 🔗 [{rec.name} 公式サイト]({rec.website})\n"
+
+    reply = f"""ご要件の間取り案に合わせて、**おすすめのハウスメーカー・サービス**をご提案します！
+{rec_text}
+
+---
+{result.summary}
+
+> ⚠️ 本推薦はAIによる参考情報です。実際の費用・仕様・対応エリアは各社にご確認ください。
+
+気になるメーカーへの来場予約・カタログ請求などもお手伝いできます。お気軽にお申し付けください！"""
+
+    return {
+        "maker_recommendations": result.recommendations,
         "stage": "follow_up",
         "reply": reply,
         "done": True,
@@ -212,8 +269,10 @@ def planning_node(state: SumaiState) -> dict:
 # ─────────────────────────────────────────
 
 def route_from_orchestrator(state: SumaiState) -> str:
-    if state.get("floor_plans"):
+    if state.get("maker_recommendations"):
         return END
+    if state.get("floor_plans"):
+        return "maker"
     return "hearing"
 
 
@@ -235,11 +294,17 @@ def build_graph() -> tuple:
     builder.add_node("orchestrator", orchestrator_node)
     builder.add_node("hearing", hearing_node)
     builder.add_node("planning", planning_node)
+    builder.add_node("maker", maker_node)
 
     builder.set_entry_point("orchestrator")
-    builder.add_conditional_edges("orchestrator", route_from_orchestrator, {END: END, "hearing": "hearing"})
+    builder.add_conditional_edges(
+        "orchestrator",
+        route_from_orchestrator,
+        {END: END, "hearing": "hearing", "maker": "maker"},
+    )
     builder.add_conditional_edges("hearing", route_from_hearing, {"planning": "planning", END: END})
-    builder.add_edge("planning", END)
+    builder.add_edge("planning", "maker")
+    builder.add_edge("maker", END)
 
     graph = builder.compile(checkpointer=memory)
     return graph, memory

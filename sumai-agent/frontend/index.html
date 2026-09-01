@@ -287,6 +287,86 @@
     padding: 6px 0 2px;
   }
 
+  /* ─── メーカー推薦カード ─── */
+  .maker-rec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .maker-rec-card {
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+  .maker-rec-card:hover { border-color: #2563a8; box-shadow: 0 2px 8px rgba(37,99,168,0.12); }
+  .maker-rank-badge {
+    position: absolute;
+    top: -8px;
+    left: 10px;
+    background: #2563a8;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .maker-rec-card.portal { border-color: #7c3aed; }
+  .maker-rec-card.portal .maker-rank-badge { background: #7c3aed; }
+  .maker-type-label {
+    font-size: 0.7rem;
+    color: #64748b;
+    margin: 14px 0 4px;
+    font-weight: 600;
+  }
+  .maker-rec-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #1a4a7a;
+    margin-bottom: 6px;
+  }
+  .maker-rec-reason {
+    font-size: 0.78rem;
+    color: #334155;
+    line-height: 1.55;
+    margin-bottom: 6px;
+  }
+  .maker-rec-price {
+    font-size: 0.74rem;
+    background: #fef3c7;
+    color: #92400e;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 6px;
+  }
+  .maker-rec-strengths {
+    font-size: 0.74rem;
+    color: #475569;
+    margin: 4px 0;
+  }
+  .maker-rec-caution {
+    font-size: 0.72rem;
+    color: #b45309;
+    background: #fffbeb;
+    border-left: 2px solid #f59e0b;
+    padding: 3px 6px;
+    margin-top: 5px;
+    border-radius: 0 4px 4px 0;
+  }
+  .maker-rec-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.76rem;
+    color: #2563a8;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .maker-rec-link:hover { text-decoration: underline; }
+
   /* ─── 送客バナー ─── */
   .cta-banner {
     background: linear-gradient(135deg, #1a4a7a, #2563a8);
@@ -391,10 +471,13 @@
     <!-- 間取り案表示エリア -->
     <div id="plans-container" class="hidden" style="margin-top:10px;"></div>
 
+    <!-- メーカー推薦カード表示エリア -->
+    <div id="maker-rec-container" class="hidden" style="margin-top:10px;"></div>
+
     <!-- 送客バナー -->
     <div id="cta-banner" class="cta-banner hidden">
       <h3>📋 ハウスメーカーへの相談・来場予約</h3>
-      <p>ご提案した間取り案を持参すれば、商談がスムーズになります。まずは気になるメーカーを確認してみましょう。</p>
+      <p>ご提案した間取り案・推薦メーカーを持参すれば、商談がスムーズになります。</p>
       <div id="maker-chips" class="maker-chips"></div>
     </div>
 
@@ -424,8 +507,11 @@
         <div id="step-planning" style="padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;">
           ② 間取り生成
         </div>
+        <div id="step-maker" style="padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;">
+          ③ メーカー推薦
+        </div>
         <div id="step-followup" style="padding:6px 8px;border-radius:6px;color:#94a3b8;">
-          ③ 送客
+          ④ 送客
         </div>
       </div>
     </div>
@@ -435,8 +521,7 @@
       <div style="font-size:0.76rem;color:#94a3b8;line-height:1.7;">
         ④ 概算見積AI<br>
         ⑤ 法規チェックAI<br>
-        ⑥ メーカー推薦AI<br>
-        ⑦ 来場予約連携
+        ⑥ 来場予約連携
       </div>
     </div>
   </aside>
@@ -621,36 +706,90 @@ function escHtml(str) {
 }
 
 function updateFlowStep(stage) {
-  const steps = { hearing: 'step-hearing', planning: 'step-planning', follow_up: 'step-followup' };
-  const active = '#e8f0fa';
-  const done = '#dcfce7';
-  const inactiveColor = '#94a3b8';
+  const S_ACTIVE  = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;';
+  const S_DONE    = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
+  const S_INACTIVE = 'padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;';
+  const S_ACTIVE_LAST  = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;';
+  const S_DONE_LAST    = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;';
+  const S_INACTIVE_LAST = 'padding:6px 8px;border-radius:6px;color:#94a3b8;';
 
-  document.getElementById('step-hearing').style.cssText = '';
-  document.getElementById('step-planning').style.cssText = '';
-  document.getElementById('step-followup').style.cssText = '';
+  const hearing  = document.getElementById('step-hearing');
+  const planning = document.getElementById('step-planning');
+  const maker    = document.getElementById('step-maker');
+  const followup = document.getElementById('step-followup');
 
   if (stage === 'hearing') {
-    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;';
-    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;';
+    hearing.style.cssText  = S_ACTIVE;
+    planning.style.cssText = S_INACTIVE;
+    maker.style.cssText    = S_INACTIVE;
+    followup.style.cssText = S_INACTIVE_LAST;
   } else if (stage === 'planning') {
-    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;';
+    hearing.style.cssText  = S_DONE;
+    planning.style.cssText = S_ACTIVE;
+    maker.style.cssText    = S_INACTIVE;
+    followup.style.cssText = S_INACTIVE_LAST;
+  } else if (stage === 'maker') {
+    hearing.style.cssText  = S_DONE;
+    planning.style.cssText = S_DONE;
+    maker.style.cssText    = S_ACTIVE;
+    followup.style.cssText = S_INACTIVE_LAST;
   } else if (stage === 'follow_up') {
-    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;';
+    hearing.style.cssText  = S_DONE;
+    planning.style.cssText = S_DONE;
+    maker.style.cssText    = S_DONE;
+    followup.style.cssText = S_ACTIVE_LAST;
   }
 }
 
-async function showCtaBanner() {
-  const makers = await loadMakers();
+function renderMakerRecommendations(recs) {
+  if (!recs || recs.length === 0) return;
+  const container = document.getElementById('maker-rec-container');
+  container.classList.remove('hidden');
+
+  const cards = recs.map(rec => {
+    const isPortal = rec.type === 'portal';
+    const typeLabel = isPortal ? '情報ポータル' : '注文住宅メーカー';
+    const strengthsHtml = rec.strengths.slice(0, 3).map(s =>
+      `<span style="display:inline-block;background:#f1f5f9;border-radius:3px;padding:1px 5px;margin:1px 2px 1px 0;font-size:0.71rem;color:#475569;">${escHtml(s)}</span>`
+    ).join('');
+    const cautionHtml = rec.caution
+      ? `<div class="maker-rec-caution">⚠️ ${escHtml(rec.caution)}</div>`
+      : '';
+    return `
+      <div class="maker-rec-card${isPortal ? ' portal' : ''}">
+        <span class="maker-rank-badge">第${rec.rank}位</span>
+        <div class="maker-type-label">${escHtml(typeLabel)}</div>
+        <div class="maker-rec-name">${escHtml(rec.name)}</div>
+        <div class="maker-rec-reason">${escHtml(rec.reason)}</div>
+        <div class="maker-rec-price">💴 ${escHtml(rec.price_band)}</div>
+        <div class="maker-rec-strengths">${strengthsHtml}</div>
+        ${cautionHtml}
+        <a class="maker-rec-link" href="${escHtml(rec.website)}" target="_blank" rel="noopener">🔗 公式サイトを見る</a>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="card" style="padding:14px;">
+      <h2 style="font-size:0.82rem;font-weight:700;color:#1a4a7a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e8f0fa;">
+        🏢 おすすめハウスメーカー・サービス
+      </h2>
+      <div class="maker-rec-grid">${cards}</div>
+    </div>
+  `;
+}
+
+async function showCtaBanner(makerRecs) {
   const banner = document.getElementById('cta-banner');
   const chips = document.getElementById('maker-chips');
+  // 推薦済みメーカーがあればそれを使う、なければAPIから全件取得
+  let makers = makerRecs || [];
+  if (makers.length === 0) {
+    const all = await loadMakers();
+    makers = all;
+  }
   chips.innerHTML = makers.map(m =>
-    `<span class="maker-chip" title="${escHtml(m.price_band)}">${escHtml(m.name)}</span>`
+    `<a class="maker-chip" href="${escHtml(m.website || '#')}" target="_blank" rel="noopener" title="${escHtml(m.price_band)}">${escHtml(m.name)}</a>`
   ).join('');
   banner.classList.remove('hidden');
 }
@@ -682,9 +821,12 @@ async function handleSend() {
     if (data.floor_plans && data.floor_plans.length > 0) {
       renderPlans(data.floor_plans);
     }
+    if (data.maker_recommendations && data.maker_recommendations.length > 0) {
+      renderMakerRecommendations(data.maker_recommendations);
+    }
     if (data.done) {
       updateFlowStep('follow_up');
-      showCtaBanner();
+      showCtaBanner(data.maker_recommendations);
     } else {
       updateFlowStep(data.stage || 'hearing');
     }
@@ -728,6 +870,8 @@ document.getElementById('new-session-btn').addEventListener('click', () => {
   document.getElementById('requirements-panel').innerHTML = '<p style="font-size:0.78rem;color:#94a3b8;">ヒアリング前</p>';
   document.getElementById('plans-container').classList.add('hidden');
   document.getElementById('plans-container').innerHTML = '';
+  document.getElementById('maker-rec-container').classList.add('hidden');
+  document.getElementById('maker-rec-container').innerHTML = '';
   document.getElementById('cta-banner').classList.add('hidden');
   updateFlowStep('hearing');
 });

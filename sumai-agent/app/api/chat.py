@@ -51,6 +51,7 @@ async def chat(req: ChatRequest):
         reply=result.get("reply", ""),
         requirements=result.get("requirements"),
         floor_plans=result.get("floor_plans"),
+        maker_recommendations=result.get("maker_recommendations"),
         stage=result.get("stage", "hearing"),
         done=result.get("done", False),
     )
