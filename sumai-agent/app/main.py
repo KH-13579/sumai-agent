@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 load_dotenv()
 
 from app.api.chat import router as chat_router
+from app.api.artifact import router as artifact_router
 
 app = FastAPI(
     title="スマイエージェント",
@@ -31,6 +32,7 @@ app.add_middleware(
 
 # API ルーター
 app.include_router(chat_router, prefix="/api")
+app.include_router(artifact_router, prefix="/api")
 
 # フロントエンド静的ファイル配信
 frontend_dir = Path(__file__).parent.parent / "frontend"

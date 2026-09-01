@@ -98,7 +98,7 @@ def _last_human_message(messages: Sequence[BaseMessage]) -> str:
 # ─────────────────────────────────────────
 
 def _get_llm(json_mode: bool = False) -> ChatOllama:
-    model = os.getenv("SUMAI_MODEL", "qwen2.5:14b")
+    model = os.getenv("SUMAI_MODEL", "qwen2.5:3b")
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     kwargs = {"model": model, "base_url": base_url, "num_predict": 4096}
     if json_mode:
@@ -175,7 +175,9 @@ def hearing_node(state: SumaiState) -> dict:
 
 def planning_node(state: SumaiState) -> dict:
     """間取り生成AIを実行して3案を生成"""
-    llm = _get_llm(json_mode=True)
+    # with_structured_output(method="json_schema")がJSON強制を担うため、
+    # ここでformat="json"を重ねて指定しない（衝突回避）
+    llm = _get_llm(json_mode=False)
     result = run_planning(state["requirements"], llm)
 
     # 自然言語応答の生成
