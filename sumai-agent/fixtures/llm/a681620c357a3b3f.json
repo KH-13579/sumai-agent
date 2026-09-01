@@ -1,0 +1,18 @@
+{
+  "key": "a681620c357a3b3ffb77ea606df6346134527de7f73dcb47c604d17057361731",
+  "model": "qwen2.5:7b",
+  "json_mode": true,
+  "recorded_at": "2026-08-25T04:57:46.456954+00:00",
+  "elapsed_sec": 75.9,
+  "messages": [
+    {
+      "role": "system",
+      "content": "あなたは住宅の敷地情報を整理する専門AIです。\nユーザーの住宅要件書から、法規チェックに必要な敷地情報だけを抽出します。\n\n## 抽出する項目\n- address: 所在地（都道府県・市区町村・地番など、書かれている範囲で）\n- site_area_sqm: 敷地面積（数値。㎡単位に換算する。「50坪」なら 165.3）\n- zoning: 用途地域（例: 第一種低層住居専用地域）\n- road_width_m: 前面道路の幅員（数値。m単位）\n- fire_zone: 防火地域 / 準防火地域 / 指定なし のいずれか\n- has_land: 土地を所有または特定済みなら true、これから探すなら false\n\n## 重要なルール\n- 書かれていない項目は必ず null にする。推測で埋めてはいけない\n- 「土地はまだ持っていない」「これから探す」→ has_land: false\n- 「所有している」「相続した」「自宅を建て替え」→ has_land: true\n- 建物の延床面積（希望の広さ）と敷地面積を混同しないこと。敷地面積は土地の広さのみ\n\n## 出力フォーマット（必ずJSONのみを返す）\n{\n  \"address\": null,\n  \"site_area_sqm\": null,\n  \"zoning\": null,\n  \"road_width_m\": null,\n  \"fire_zone\": null,\n  \"has_land\": false\n}\n"
+    },
+    {
+      "role": "human",
+      "content": "## 住宅要件書（敷地に関する記述）\n- 土地情報: 広島市、約40坪\n- 希望の広さ・部屋数: 2階建て\n- その他の要望: 未定\n\n上記から敷地情報を抽出してJSONで返してください。\n"
+    }
+  ],
+  "response": "{\n  \"address\": \"広島市\",\n  \"site_area_sqm\": 139.3,\n  \"zoning\": null,\n  \"road_width_m\": null,\n  \"fire_zone\": null,\n  \"has_land\": false\n}"
+}

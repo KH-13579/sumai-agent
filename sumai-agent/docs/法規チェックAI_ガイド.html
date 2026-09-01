@@ -1,0 +1,975 @@
+<title>法規チェックAI</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* ── トークン：ライトを完全定義し、ダークはトークンのみ上書き ───── */
+  :root {
+    --paper:        #EFF3F2;
+    --surface:      #FFFFFF;
+    --surface-2:    #F7FAF9;
+    --ink:          #15302D;
+    --ink-2:        #40605C;
+    --ink-3:        #6E8884;
+    --rule:         #CBD9D6;
+    --rule-strong:  #A9BFBB;
+    --accent:       #4F7A34;
+    --accent-soft:  #E8F0DF;
+    --warn:         #9C6416;
+    --warn-soft:    #FAF0DC;
+    --crit:         #96382C;
+    --crit-soft:    #FAE7E3;
+    --term-bg:      #142522;
+    --term-ink:     #D9E7E3;
+    --term-dim:     #7E9C95;
+    --term-accent:  #A6C97E;
+
+    --font-display: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    --font-body:    "Noto Sans JP", -apple-system, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+
+    --fs-h1:   clamp(1.85rem, 4vw, 2.55rem);
+    --fs-h2:   clamp(1.25rem, 2.3vw, 1.55rem);
+    --fs-h3:   1.04rem;
+    --fs-sm:   0.875rem;
+    --fs-xs:   0.775rem;
+
+    --measure: 42em;
+    --lh:      1.9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:       #0F1918;
+      --surface:     #16211F;
+      --surface-2:   #1B2825;
+      --ink:         #E3ECE9;
+      --ink-2:       #A9BEBA;
+      --ink-3:       #7E9490;
+      --rule:        #283A36;
+      --rule-strong: #3B514A;
+      --accent:      #97BF70;
+      --accent-soft: #1F2C1C;
+      --warn:        #D6A15E;
+      --warn-soft:   #2C2318;
+      --crit:        #D4796A;
+      --crit-soft:   #2E1D1A;
+      --term-bg:     #1C2E2B;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:       #0F1918;
+    --surface:     #16211F;
+    --surface-2:   #1B2825;
+    --ink:         #E3ECE9;
+    --ink-2:       #A9BEBA;
+    --ink-3:       #7E9490;
+    --rule:        #283A36;
+    --rule-strong: #3B514A;
+    --accent:      #97BF70;
+    --accent-soft: #1F2C1C;
+    --warn:        #D6A15E;
+    --warn-soft:   #2C2318;
+    --crit:        #D4796A;
+    --crit-soft:   #2E1D1A;
+    --term-bg:     #1C2E2B;
+  }
+
+  /* ── ベース ─────────────────────────────────────────── */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: var(--lh);
+    line-break: strict;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 61rem; margin: 0 auto; padding: 0 1.5rem 6rem; }
+  p, ul, ol { max-width: var(--measure); }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px;
+  }
+
+  /* ── ヘッダー ───────────────────────────────────────── */
+  header {
+    border-bottom: 1px solid var(--rule-strong);
+    padding: 4rem 0 2rem;
+    display: flex; flex-direction: column; gap: 1.1rem;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: var(--fs-h1);
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .lede { margin: 0; color: var(--ink-2); font-size: 1.04rem; max-width: 40em; }
+
+  .factstrip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin-top: 0.6rem;
+  }
+  .fact { background: var(--surface); padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.15rem; }
+  .fact dt { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-3); letter-spacing: 0.04em; }
+  .fact dd { margin: 0; font-size: var(--fs-sm); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+  /* ── 目次 ───────────────────────────────────────────── */
+  nav.toc { margin: 2.5rem 0 0; padding: 1.2rem 1.4rem; background: var(--surface); border: 1px solid var(--rule); }
+  nav.toc h2 { font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 0.7rem; font-weight: 500; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; max-width: none; columns: 2; column-gap: 2rem; }
+  nav.toc li { margin: 0 0 0.32rem; font-size: var(--fs-sm); break-inside: avoid; }
+  nav.toc .num { font-family: var(--font-mono); color: var(--ink-3); font-size: var(--fs-xs); margin-right: 0.5em; }
+  @media (max-width: 40rem) { nav.toc ol { columns: 1; } }
+
+  /* ── セクション ─────────────────────────────────────── */
+  section { margin-top: 3.6rem; }
+  h2 {
+    font-family: var(--font-display);
+    font-size: var(--fs-h2);
+    font-weight: 700;
+    line-height: 1.4;
+    margin: 0 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rule);
+    display: flex; align-items: baseline; gap: 0.7rem;
+    text-wrap: balance;
+  }
+  h2 .sec-num {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    flex-shrink: 0;
+  }
+  h3 { font-size: var(--fs-h3); font-weight: 700; margin: 2rem 0 0.6rem; color: var(--ink); }
+  h4 { font-size: 0.95rem; font-weight: 700; margin: 1.4rem 0 0.4rem; color: var(--ink-2); }
+  section > p:first-of-type { margin-top: 0; }
+
+  /* ── 番号付き手順（内容が本当に順序を持つ場合だけ使う） ── */
+  ol.steps { list-style: none; margin: 1.4rem 0 0; padding: 0; max-width: none; counter-reset: step; }
+  ol.steps > li {
+    position: relative;
+    padding: 0 0 1.6rem 3.1rem;
+    border-left: 1px solid var(--rule);
+    margin-left: 0.85rem;
+  }
+  ol.steps > li:last-child { border-left-color: transparent; padding-bottom: 0.4rem; }
+  ol.steps > li::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute; left: -0.85rem; top: 0;
+    width: 1.7rem; height: 1.7rem;
+    background: var(--accent); color: var(--paper);
+    font-family: var(--font-mono); font-size: 0.8rem; font-weight: 500;
+    display: grid; place-items: center;
+    border-radius: 50%;
+  }
+  ol.steps > li > h3:first-child { margin-top: 0.05rem; }
+
+  /* ── ターミナル（両テーマで暗色。端末らしさを保つ） ───── */
+  figure.term { margin: 0.9rem 0 1.2rem; border: 1px solid var(--rule-strong); background: var(--term-bg); }
+  figure.term figcaption {
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--term-dim);
+    padding: 0.5rem 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.09);
+  }
+  figure.term pre { margin: 0; padding: 0.9rem 1rem; overflow-x: auto; }
+  figure.term code { font-family: var(--font-mono); font-size: 0.84rem; line-height: 1.75; color: var(--term-ink); }
+  figure.term .c { color: var(--term-dim); }
+  figure.term .p { color: var(--term-accent); }
+
+  /* ── インラインコード ───────────────────────────────── */
+  :not(pre) > code {
+    font-family: var(--font-mono); font-size: 0.855em;
+    background: var(--surface-2); border: 1px solid var(--rule);
+    padding: 0.08em 0.34em; border-radius: 2px;
+    color: var(--ink);
+    word-break: break-word;
+  }
+
+  /* ── 表 ─────────────────────────────────────────────── */
+  .tablewrap { overflow-x: auto; margin: 1.1rem 0 1.3rem; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
+  th, td { text-align: left; padding: 0.62rem 0.85rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 500;
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table code { white-space: nowrap; }
+
+  /* ── ステータスチップ ───────────────────────────────── */
+  .chip {
+    display: inline-block; font-family: var(--font-mono);
+    font-size: var(--fs-xs); letter-spacing: 0.04em;
+    padding: 0.1rem 0.45rem; border: 1px solid currentColor; border-radius: 2px;
+    white-space: nowrap;
+  }
+  .chip.ok   { color: var(--accent); background: var(--accent-soft); }
+  .chip.warn { color: var(--warn);   background: var(--warn-soft); }
+  .chip.crit { color: var(--crit);   background: var(--crit-soft); }
+  .chip.idle { color: var(--ink-3);  background: var(--surface-2); }
+
+  /* ── 注記 ───────────────────────────────────────────── */
+  .note {
+    border-left: 3px solid var(--rule-strong);
+    background: var(--surface);
+    padding: 0.85rem 1.1rem;
+    margin: 1.1rem 0;
+    font-size: var(--fs-sm);
+    max-width: 44em;
+  }
+  .note > :first-child { margin-top: 0; }
+  .note > :last-child { margin-bottom: 0; }
+  .note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .note.crit { border-left-color: var(--crit); background: var(--crit-soft); }
+  .note .label {
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    display: block; margin-bottom: 0.3rem; color: var(--ink-2);
+  }
+  .note.warn .label { color: var(--warn); }
+  .note.crit .label { color: var(--crit); }
+
+  /* ── 図（等幅で手組み。建築図面の作図感に寄せる） ────── */
+  figure.diagram { margin: 1.3rem 0; border: 1px solid var(--rule-strong); background: var(--surface); padding: 0; }
+  figure.diagram pre {
+    margin: 0; padding: 1.2rem 1.1rem; overflow-x: auto;
+    font-family: var(--font-mono); font-size: 0.79rem; line-height: 1.7;
+    color: var(--ink-2);
+  }
+  figure.diagram b { color: var(--ink); font-weight: 500; }
+  figure.diagram i { color: var(--accent); font-style: normal; }
+  figure.diagram figcaption {
+    font-size: var(--fs-xs); color: var(--ink-3);
+    padding: 0.55rem 1.1rem; border-top: 1px solid var(--rule);
+    font-family: var(--font-mono); letter-spacing: 0.05em;
+  }
+
+  /* ── 層・カード列 ───────────────────────────────────── */
+  .layers { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin: 1.2rem 0; }
+  .layer { background: var(--surface); padding: 0.95rem 1.1rem; display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.9rem; }
+  .layer .tier {
+    grid-row: span 2; font-family: var(--font-mono); font-size: var(--fs-xs);
+    color: var(--accent); letter-spacing: 0.08em; padding-top: 0.22rem;
+  }
+  .layer strong { font-size: 0.95rem; }
+  .layer p { margin: 0.15rem 0 0; font-size: var(--fs-sm); color: var(--ink-2); max-width: 42em; }
+
+  ul, ol { padding-left: 1.4em; }
+  li { margin-bottom: 0.32rem; }
+  strong { font-weight: 700; }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2.6rem 0; }
+
+  footer { margin-top: 4rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); font-size: var(--fs-xs); color: var(--ink-3); font-family: var(--font-mono); letter-spacing: 0.04em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">スマイエージェント / Phase 2</span>
+  <h1>法規チェックAI</h1>
+  <p class="lede">環境構築からアーキテクチャまでの通し解説。建ぺい率・容積率・高さの判定はすべて決定論的計算で行い、LLM は自由文からの敷地情報の抽出だけを担います。</p>
+  <dl class="factstrip">
+    <div class="fact"><dt>要件</dt><dd>LAW-1〜4</dd></div>
+    <div class="fact"><dt>テスト</dt><dd>98 passed</dd></div>
+    <div class="fact"><dt>新規ファイル</dt><dd>13</dd></div>
+    <div class="fact"><dt>モデル</dt><dd>qwen2.5:3b</dd></div>
+    <div class="fact"><dt>NFR-06</dt><dd>キャッシュ実装済</dd></div>
+  </dl>
+</header>
+
+<nav class="toc">
+  <h2>目次</h2>
+  <ol>
+    <li><span class="num">01</span><a href="#status">前提と全体像</a></li>
+    <li><span class="num">02</span><a href="#setup">環境構築</a></li>
+    <li><span class="num">03</span><a href="#launch">起動手順</a></li>
+    <li><span class="num">04</span><a href="#demo">デモの実行</a></li>
+    <li><span class="num">05</span><a href="#replay">LLM応答のキャッシュ</a></li>
+    <li><span class="num">06</span><a href="#arch">システムの動作</a></li>
+    <li><span class="num">07</span><a href="#legal">法規チェックの中身</a></li>
+    <li><span class="num">08</span><a href="#extend">エージェントの追加</a></li>
+    <li><span class="num">09</span><a href="#test">テスト</a></li>
+    <li><span class="num">10</span><a href="#issues">既知の問題と対処</a></li>
+  </ol>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="status">
+  <h2><span class="sec-num">01</span>前提と全体像</h2>
+
+  <p>法規チェックAI は、間取り3案に対して建ぺい率・容積率・高さの適合を判定し、数値計算では判断できない項目を<strong>要確認フラグ</strong>として立てます。要件定義書 §7.6（LAW-1〜4）に対応します。</p>
+
+  <p>初めて動かす場合は <a href="#setup">02 章</a>から順に進めてください。すでに構築済みなら <a href="#launch">03 章（起動手順）</a>だけで足ります。<strong>人前でデモを行う場合は <a href="#replay">05 章（応答キャッシュ）</a>を必ず読んでください。</strong></p>
+
+  <h3>必要なもの</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>項目</th><th>要件</th><th>備考</th></tr></thead>
+      <tbody>
+        <tr><td>Python</td><td>3.10 以上</td><td>リポジトリ内に venv を作ります</td></tr>
+        <tr><td>Ollama</td><td>ローカルで起動</td><td>外部 API キーは不要 — <a href="https://ollama.com/">ollama.com</a></td></tr>
+        <tr><td>モデル</td><td><code>qwen2.5:3b</code>（1.9 GB）</td><td>初期フェーズのチーム統一モデル。品質が必要な場面は 7b / 14b に上げます（<a href="#issues">10 章</a>）</td></tr>
+        <tr><td>メモリ</td><td>8 GB 以上（3b）／16 GB 以上（14b）</td><td>14b は 9 GB の重み＋KV キャッシュを必要とします</td></tr>
+        <tr><td>OS</td><td>Windows / macOS / Linux</td><td>コマンドは両系統を併記しています</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note warn">
+    <span class="label">最初に知っておくべきこと — 応答時間</span>
+    <p>Ollama が GPU を使えるのは <strong>NVIDIA（CUDA）と AMD（ROCm）のみ</strong>です。それ以外の環境では CPU 推論になり、<strong>間取り生成 1 回に十数分〜数十分</strong>かかります。実演にこの待ち時間は成立しないため、<a href="#replay">05 章の応答キャッシュ</a>で事前に応答を保存しておいてください。要件定義書 NFR-06 が要求している仕組みです。</p>
+  </div>
+
+  <h3>この文書の構成</h3>
+  <div class="layers">
+    <div class="layer">
+      <span class="tier">使う</span>
+      <strong>02〜05 章 — 構築・起動・デモ</strong>
+      <p>環境を作り、起動し、デモを走らせるまで。デモ当日の運用（応答キャッシュ）は 05 章にまとまっています。</p>
+    </div>
+    <div class="layer">
+      <span class="tier">知る</span>
+      <strong>06〜07 章 — 設計と判定内容</strong>
+      <p>LangGraph のグラフ形状、エージェント間の3つの接続点、そして法規判定が実際に何を計算しているか。</p>
+    </div>
+    <div class="layer">
+      <span class="tier">作る</span>
+      <strong>08〜10 章 — 拡張・テスト・既知の問題</strong>
+      <p>見積AI・メーカー推薦AI を追加する手順、テストの構成、そして踏みやすい落とし穴。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="setup">
+  <h2><span class="sec-num">02</span>環境構築</h2>
+
+  <p>リポジトリ内の <code>sumai-agent/</code> ディレクトリで作業します。以下のコマンドはすべてそこを起点にしています。</p>
+
+  <div class="note">
+    <span class="label">表記について</span>
+    <p>以降 <code>PY</code> と書いた箇所は、<strong>Windows では <code>./venv/Scripts/python.exe</code></strong>、<strong>macOS / Linux では <code>./venv/bin/python</code></strong> に読み替えてください。</p>
+  </div>
+
+  <ol class="steps">
+    <li>
+      <h3>仮想環境を作る</h3>
+      <figure class="term">
+        <figcaption>Windows</figcaption>
+<pre><code><span class="p">cd</span> sumai-agent
+python -m venv venv</code></pre>
+      </figure>
+      <figure class="term">
+        <figcaption>macOS / Linux</figcaption>
+<pre><code><span class="p">cd</span> sumai-agent
+python3 -m venv venv</code></pre>
+      </figure>
+    </li>
+
+    <li>
+      <h3>依存ライブラリを入れる</h3>
+      <figure class="term">
+        <figcaption>ターミナル</figcaption>
+<pre><code>PY -m pip install --upgrade pip
+PY -m pip install -r requirements.txt pytest</code></pre>
+      </figure>
+      <p>主要な依存は langgraph / fastapi / pydantic / langchain-ollama / httpx です。外部 LLM の API キーは一切必要ありません。</p>
+    </li>
+
+    <li>
+      <h3><code>.env</code> を作る</h3>
+      <figure class="term">
+        <figcaption>Windows</figcaption>
+<pre><code>copy .env.example .env</code></pre>
+      </figure>
+      <figure class="term">
+        <figcaption>macOS / Linux</figcaption>
+<pre><code>cp .env.example .env</code></pre>
+      </figure>
+      <p>既定値のまま動きます。押さえておくべき変数は4つです。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>変数</th><th>既定</th><th>意味</th></tr></thead>
+          <tbody>
+            <tr><td><code>SUMAI_MODEL</code></td><td><code>qwen2.5:3b</code></td><td>使用するモデル。Ollama で取得済みの名前と一致させます</td></tr>
+            <tr><td><code>SUMAI_LLM_CACHE</code></td><td><code>off</code></td><td>LLM応答のキャッシュ → <a href="#replay">05 章</a></td></tr>
+            <tr><td><code>SUMAI_LEGAL_AUTOFIX</code></td><td><code>0</code></td><td>法規NG時の自律修正ループ。有効にすると間取り生成が2回走ります</td></tr>
+            <tr><td><code>REINFOLIB_API_KEY</code></td><td>（空）</td><td>空でも動作します（プリセット値・仮定値へフォールバック）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </li>
+
+    <li>
+      <h3>Ollama を入れてモデルを取得する</h3>
+      <p><a href="https://ollama.com/">ollama.com</a> からインストールしてください。Windows / macOS はインストーラを実行すれば常駐します。Linux は次のコマンドです。</p>
+      <figure class="term">
+        <figcaption>Linux</figcaption>
+<pre><code>curl -fsSL https://ollama.com/install.sh | sh</code></pre>
+      </figure>
+      <p>続いてモデルを取得します。Ollama が起動している状態で実行してください。</p>
+      <figure class="term">
+        <figcaption>ターミナル</figcaption>
+<pre><code>ollama pull qwen2.5:3b   <span class="c"># 約 1.9 GB（既定）</span>
+ollama list
+
+<span class="c"># 起動確認（{"version":"..."} が返る）</span>
+curl http://localhost:11434/api/version</code></pre>
+      </figure>
+    </li>
+
+    <li>
+      <h3>テストで疎通を確認する</h3>
+      <p>テストは LLM をすべてモックしているため <strong>Ollama 不要・数秒で完了</strong>します。ここが通れば構築は成功です。</p>
+      <figure class="term">
+        <figcaption>ターミナル</figcaption>
+<pre><code>PY -m pytest tests/ -q</code></pre>
+      </figure>
+    </li>
+  </ol>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="launch">
+  <h2><span class="sec-num">03</span>起動手順</h2>
+
+  <ol class="steps">
+    <li>
+      <h3>Ollama が動いていることを確認する</h3>
+      <figure class="term">
+        <figcaption>ターミナル</figcaption>
+<pre><code>curl http://localhost:11434/api/version</code></pre>
+      </figure>
+      <p>Windows / macOS 版は常駐しているため通常は不要です。Linux で手動導入した場合は <code>ollama serve</code> の起動が必要です。</p>
+    </li>
+
+    <li>
+      <h3>モデルをメモリに載せておく</h3>
+      <p>Ollama は <strong>5 分間呼ばれないとモデルをメモリから降ろします</strong>。デモ中に解説で間が空くと再ロードが走るため（14b では約 100 秒。3b なら数秒で済みます）、事前に温めて <code>keep_alive</code> を延ばしておきます。</p>
+      <figure class="term">
+        <figcaption>ターミナル</figcaption>
+<pre><code>curl -s http://localhost:11434/api/generate \
+  -d '{"model":"qwen2.5:3b","prompt":"1+1=","stream":false,"keep_alive":"2h"}' &gt; /dev/null
+
+<span class="c"># メモリに載ったか確認</span>
+curl -s http://localhost:11434/api/ps</code></pre>
+      </figure>
+      <p><a href="#replay">05 章の応答キャッシュ</a>を使う場合、実機を呼ばないためこの手順は不要です。</p>
+    </li>
+
+    <li>
+      <h3>アプリを起動する</h3>
+      <figure class="term">
+        <figcaption>ターミナル</figcaption>
+<pre><code>PY run.py</code></pre>
+      </figure>
+      <p><code>Application startup complete.</code> が出れば起動完了です。このターミナルは開いたままにしてください。</p>
+    </li>
+
+    <li>
+      <h3>ブラウザで開く</h3>
+      <figure class="term">
+        <figcaption>ブラウザ</figcaption>
+<pre><code>http://localhost:8000</code></pre>
+      </figure>
+      <p>疎通だけ確かめるなら <code>curl http://localhost:8000/api/health</code> でも構いません。</p>
+    </li>
+  </ol>
+
+  <h3>停止する</h3>
+  <p>アプリを起動したターミナルで <strong>Ctrl+C</strong> です。</p>
+
+  <div class="note warn">
+    <span class="label">プロセス名でまとめて kill しないこと</span>
+    <p><code>pkill -f run.py</code> のようなパターン照合は、<strong>実行中のシェル自身にマッチして現在のセッションを落とす</strong>ことがあります。ポート番号から特定して止めてください（<code>lsof -i :8000</code> / Windows は <code>netstat -ano</code>）。</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="demo">
+  <h2><span class="sec-num">04</span>デモの実行</h2>
+
+  <p>左パネルの「デモシナリオ」から <strong>ペルソナC（土地ありこだわり層）</strong>を選んでください。このプリセットは発話に敷地面積・用途地域・前面道路幅員を含むため、法規チェックが実データで数値判定を行います。<strong>法規チェックAI の見せ場</strong>となるシナリオです。</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>ペルソナ</th><th>法規チェックの挙動</th></tr></thead>
+      <tbody>
+        <tr><td><strong>C</strong>：土地あり</td><td>実際の敷地条件で数値判定（建ぺい率・容積率・高さ）</td></tr>
+        <tr><td><strong>A</strong>：初めて検討層（土地なし）</td><td>敷地未確定のため標準的な条件を仮定した参考判定。<span class="chip crit">high</span>「敷地確定後の再チェック」フラグが立つ</td></tr>
+        <tr><td><strong>B</strong>：建替え・住替え層</td><td>発話に含まれる敷地情報の量に応じて上記の中間</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>順に表示されるもの</h3>
+  <ol>
+    <li><strong>ヒアリングAI の追質問</strong> — 家族構成・予算・土地情報・希望の広さの4項目が揃うまで間取りは生成されません</li>
+    <li><strong>間取り3案</strong> — コスパ重視／広さ重視／収納重視</li>
+    <li><strong>法規チェック結果</strong> — 敷地条件の表、案ごとの判定表、要確認フラグ、免責</li>
+    <li><strong>送客 CTA とアーティファクトのリンク</strong> — 右パネルに「成果物」カードが出ます</li>
+  </ol>
+
+  <p>右パネルのフロー表示は ① ヒアリング → ④ 送客 まで進みます。このうち ③ 法規チェックが今回追加された段です。</p>
+
+  <h3>機械可読アーティファクト</h3>
+  <p>要件定義書 §16「機械可読アーティファクト」に対応する統合 JSON です。下流エージェント（見積AI・メーカー推薦AI）はこれを読むだけで接続できます。</p>
+  <figure class="term">
+    <figcaption>ターミナル</figcaption>
+<pre><code>curl http://localhost:8000/api/artifact/&lt;session_id&gt;</code></pre>
+  </figure>
+  <p>中身は <code>requirements</code> / <code>floor_plans</code> / <code>site_info</code> / <code>legal_checks</code>、および Phase 2 用に予約した空スロット <code>estimate</code> / <code>maker_recommendation</code> です。</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="replay">
+  <h2><span class="sec-num">05</span>LLM応答のキャッシュ</h2>
+
+  <p>CPU 推論では間取り生成 1 回に <strong>13〜39 分</strong>かかります。この待ち時間は実演では成立しません。そこで LLM の応答を一度だけ実機で取得してファイルに保存し、2 回目以降はそのキャッシュを返します。要件定義書の <strong>NFR-06 オフライン再生</strong>が要求している仕組みで、副作用として <strong>NFR-01 デモ再現性</strong>（同じ入力に必ず同じ応答）も満たされます。</p>
+
+  <div class="note">
+    <span class="label">モデル変更やメモリ増設との違い</span>
+    <p>軽量モデルへの切り替えやメモリの増設は待ち時間を<strong>短く</strong>するだけで、CPU 推論である限り数分〜数十分は残ります。待ち時間を <strong>0 にできるのはキャッシュのみ</strong>です。ネットワーク断や Ollama の停止でもデモが完走するという利点も、キャッシュにしかありません。さらに 7b への変更は<strong>間取りが 1 案に減る</strong>という別の問題を生みます（<a href="#issues">10 章</a>）。</p>
+  </div>
+
+  <h3>4 つのモード</h3>
+  <p><code>.env</code> の <code>SUMAI_LLM_CACHE</code> で切り替えます。</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>値</th><th>動作</th><th>使う場面</th></tr></thead>
+      <tbody>
+        <tr><td><code>off</code></td><td>常に実機の LLM を呼ぶ</td><td>既定。開発中</td></tr>
+        <tr><td><code>auto</code></td><td>キャッシュがあれば返し、無ければ実機を呼んで保存</td><td><strong>デモ準備・デモ本番</strong></td></tr>
+        <tr><td><code>replay</code></td><td>キャッシュのみを使う。無ければエラー</td><td>デモ前の最終確認</td></tr>
+        <tr><td><code>record</code></td><td>常に実機を呼んでキャッシュを上書き</td><td>プロンプト変更後の作り直し</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><code>auto</code> が実用上の中心です。キャッシュが外れても実機にフォールバックするだけなので、<strong>デモが止まることがありません</strong>。逆に <code>replay</code> はキャッシュが 1 つでも欠けていればその場で失敗するため、事前確認に向いています。</p>
+
+  <h3>手順</h3>
+  <ol class="steps">
+    <li>
+      <h3>デモシナリオのキャッシュを作る</h3>
+      <p>初回だけ実機を走らせます。数十分かかるので裏で流しておいてください。ブラウザに張り付く必要はありません。</p>
+      <figure class="term">
+        <figcaption>ターミナル</figcaption>
+<pre><code>PY scripts/record_demo.py --persona C</code></pre>
+      </figure>
+      <p>ターンごとの所要時間が出力されるため、<strong>モデル比較のベンチとしても使えます</strong>。<code>--model qwen2.5:14b</code> を付ければ <code>.env</code> を書き換えずに別モデルを計測できます（既定の 3b で品質が足りない場合の比較用。7b でも間取りが 1 案に減った実測があります → <a href="#issues">10 章</a>）。</p>
+    </li>
+
+    <li>
+      <h3>キャッシュだけで完走するか検証する</h3>
+      <p><code>--verify</code> は <code>SUMAI_LLM_CACHE=replay</code> で走ります。<strong>Ollama を止めてから実行</strong>すれば、オフラインでデモが成立することを確実に確認できます。</p>
+      <figure class="term">
+        <figcaption>ターミナル</figcaption>
+<pre><code><span class="c"># Ollama を停止したうえで実行する</span>
+PY scripts/record_demo.py --persona C --verify</code></pre>
+      </figure>
+    </li>
+
+    <li>
+      <h3>本番は auto で起動する</h3>
+      <p><code>.env</code> を <code>SUMAI_LLM_CACHE=auto</code> に書き換えてアプリを起動すると、キャッシュ済みのシナリオは即座に応答が返ります。</p>
+      <figure class="term">
+        <figcaption>.env</figcaption>
+<pre><code>SUMAI_LLM_CACHE=auto</code></pre>
+      </figure>
+    </li>
+  </ol>
+
+  <h3>キャッシュが命中する条件</h3>
+  <p>キャッシュキーは <strong>モデル名 ＋ JSON モード ＋ 全会話履歴</strong>のハッシュです。この 3 つが作成時と一致したときだけキャッシュが使われます。</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>変えたもの</th><th>キャッシュは命中するか</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td>何も変えない</td><td><span class="chip ok">命中</span></td><td>—</td></tr>
+        <tr><td>モデル（14b → 7b）</td><td><span class="chip warn">命中しない</span></td><td>14b の応答を 7b のデモで黙って返す事故を防ぐため、意図的にキーに含めています</td></tr>
+        <tr><td>発話の文言</td><td><span class="chip warn">命中しない</span></td><td>会話履歴がキーに入るため。デモ当日も作成時と同じ文言を使ってください</td></tr>
+        <tr><td>プロンプト（コード側）</td><td><span class="chip warn">命中しない</span></td><td>システムプロンプトも履歴の一部です。変更したら <code>record</code> で作り直します</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note warn">
+    <span class="label">デモ当日の発話について</span>
+    <p><code>scripts/record_demo.py</code> はヒアリングが未完のとき <code>提案に移ってください。</code> を送ります。ブラウザからも<strong>同じ文言</strong>を使ってください。別の言い方をするとキャッシュが外れ、<code>auto</code> なら実機にフォールバックして数十分待つことになります（止まりはしません）。</p>
+  </div>
+
+  <p>キャッシュは <code>fixtures/llm/</code> に 1 応答 1 ファイルの JSON として残ります。応答本文だけでなく<strong>プロンプトも保存する</strong>ため、何を保存したのかを後からレビューできます。</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="arch">
+  <h2><span class="sec-num">06</span>システムの動作</h2>
+
+  <p>LangGraph のグラフ形状は次のとおりです。破線の逆流は法規NG 時の自律修正ループ（既定は無効）です。</p>
+
+  <figure class="diagram">
+<pre>  <b>orchestrator</b> ──┬─(間取り生成済み)──→ <b>follow_up</b> ───────────→ <b>compose</b> ──→ END
+                 │
+                 └─→ <b>hearing</b> ──┬─(要件不足・追質問)──────────→ <b>compose</b> ──→ END
+                                │
+                                └─→ <b>planning</b> ──→ <b>legal</b> ──→ <b>compose</b> ──→ END
+                                       ▲            │
+                                       └╌╌╌╌╌╌╌╌╌╌╌┘
+                                     <i>SUMAI_LEGAL_AUTOFIX=1 かつ NG のとき、最大1回</i></pre>
+    <figcaption>app/agents/orchestrator.py</figcaption>
+  </figure>
+
+  <h3>3つの接続点</h3>
+
+  <div class="layers">
+    <div class="layer">
+      <span class="tier">A</span>
+      <strong><code>POST_HEARING_STEPS</code> — 実行順を宣言する唯一の場所</strong>
+      <p>要件が揃った後に走る専門エージェントは、すべてこのリストで宣言します。エージェントを追加する際にグラフの分岐を書き換える必要はなく、<code>AgentStep</code> を1行足すだけで済みます。<code>is_enabled</code> で条件付きスキップ、<code>route_override</code> で逆流（法規の自動修正がこれを使用）ができます。</p>
+    </div>
+    <div class="layer">
+      <span class="tier">B</span>
+      <strong><code>reply_sections</code> と <code>compose_node</code> — 応答の合成</strong>
+      <p>各エージェントは <code>reply</code> を直接書かず、<code>reply_sections</code> に markdown を1セクション push します。終端の <code>compose_node</code> が連結・重複排除（同一エージェントは最後の1件のみ採用するため、修正ループで2回走っても重複表示されません）を行い、成果物がある応答にだけ免責を付与します。</p>
+    </div>
+    <div class="layer">
+      <span class="tier">C</span>
+      <strong><code>GET /api/artifact/{session_id}</code> — 下流へのデータ入口</strong>
+      <p>LangGraph のチェックポイントからセッションの成果物を取り出し、統合 JSON として出力します。見積AI を接続する場合、グラフの内部を理解する必要はなく、これを読むだけで足ります。</p>
+    </div>
+  </div>
+
+  <h3>ファイル一覧</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>ファイル</th><th>責務</th></tr></thead>
+      <tbody>
+        <tr><td><code>app/agents/state.py</code></td><td>グラフ状態の定義、<code>reply_sections</code> のリデューサー、エージェント間の受け渡し契約</td></tr>
+        <tr><td><code>app/agents/pipeline.py</code></td><td><code>AgentStep</code>、順序解決、宣言から LangGraph のノードと条件付きエッジを自動生成</td></tr>
+        <tr><td><code>app/agents/legal_agent.py</code></td><td>法規チェックAI 本体、応答文の生成、修正指示の生成</td></tr>
+        <tr><td><code>app/tools/zoning.py</code></td><td>用途地域マスタ（全13地域の法定値）</td></tr>
+        <tr><td><code>app/tools/legal_rules.py</code></td><td>決定論的判定エンジン（建ぺい率・容積率・高さ・要確認フラグ）</td></tr>
+        <tr><td><code>app/tools/site_lookup.py</code></td><td>敷地照会（外部API → プリセット → 仮定値）</td></tr>
+        <tr><td><code>app/tools/area_utils.py</code></td><td>面積表記のパースと<strong>単位補正</strong>（<a href="#issues">10 章</a>参照）</td></tr>
+        <tr><td><code>app/schemas/legal.py</code></td><td><code>SiteInfo</code> / <code>LegalCheckItem</code> / <code>ManualCheckFlag</code> / <code>PlanLegalCheck</code></td></tr>
+        <tr><td><code>app/schemas/artifact.py</code></td><td>機械可読アーティファクト</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="legal">
+  <h2><span class="sec-num">07</span>法規チェックの中身</h2>
+
+  <p>中核となる設計は<strong>判定を純粋な算術で行い、LLM を介在させない</strong>ことです。LLM の役割は <code>land_info</code> の自由文から敷地面積・用途地域・道路幅員を抽出する1点のみです。これにより同じ入力に対して常に同じ判定文が返り、LLM の揺れでキャッシュ作成時に破綻することがありません（NFR-01）。</p>
+
+  <figure class="diagram">
+<pre>  <b>[LLM]</b>    land_info 自由文  ──→  SiteInfo（敷地面積 / 用途地域 / 道路幅員）
+                                        │
+  <b>[Python]</b>  建ぺい率 = 建築面積 ÷ 敷地面積        ≤ 指定建ぺい率      ──→ ok / ng
+            容積率  = 延床面積 ÷ 敷地面積        ≤ <i>min(指定, 幅員×係数)</i> ──→ ok / ng
+            高さ    = 階数×3 + 2m                ≤ 絶対高さ制限      ──→ ok / ng
+                                        │
+  <b>[Python]</b>  要確認フラグ（斜線 / 日影 / 防火 / 条例 …）を定型生成
+                                        │
+                                        ▼
+            判定文もテンプレ生成 <i>= 毎回同一出力</i></pre>
+    <figcaption>app/tools/legal_rules.py</figcaption>
+  </figure>
+
+  <h3>自動判定（LAW-2）</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>項目</th><th>判定式</th><th>根拠</th></tr></thead>
+      <tbody>
+        <tr><td>建ぺい率</td><td>建築面積 ÷ 敷地面積 ≤ 指定建ぺい率</td><td class="num">第53条</td></tr>
+        <tr><td>容積率</td><td>延床面積 ÷ 敷地面積 ≤ <strong>min(指定容積率, 前面道路幅員 × 法定係数)</strong></td><td class="num">第52条</td></tr>
+        <tr><td>絶対高さ制限</td><td>推定高さ ≤ 10m（低層住居専用・田園住居のみ）</td><td class="num">第55条</td></tr>
+        <tr><td>用途制限</td><td>工業専用地域は住宅不可 → ng</td><td class="num">別表第二</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>容積率が要点です。幅員 12m 未満の場合、<strong>基準容積率が指定容積率より厳しくなるのが通例</strong>なので、両者の小さい方を採用します。法定係数は住居系が 4/10、その他が 6/10 です。角地・防火地域の緩和は<strong>一律見込みません</strong>（安全側の判定）。</p>
+
+  <h3>要確認フラグ（LAW-3）</h3>
+  <p>自動計算できない項目は無理に計算せず、明確に切り分けて専門家確認に回します。すべて定型生成で、用途地域と敷地条件に応じて増減します。</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>項目</th><th>出る条件</th><th>優先度</th><th>根拠</th></tr></thead>
+      <tbody>
+        <tr><td>道路斜線制限</td><td>全用途地域</td><td><span class="chip crit">high</span></td><td class="num">第56条1項1号</td></tr>
+        <tr><td>北側斜線制限</td><td>低層・中高層住居専用</td><td><span class="chip crit">high</span></td><td class="num">第56条1項3号</td></tr>
+        <tr><td>日影規制</td><td>住居系・近隣商業・準工業</td><td><span class="chip warn">medium</span></td><td class="num">第56条の2</td></tr>
+        <tr><td>外壁の後退距離</td><td>低層住居専用・田園住居</td><td><span class="chip warn">medium</span></td><td class="num">第54条</td></tr>
+        <tr><td>防火・準防火地域</td><td>未確認なら high／指定済なら medium</td><td><span class="chip crit">high</span></td><td class="num">第61・62条</td></tr>
+        <tr><td>セットバック</td><td>幅員 &lt; 4m</td><td><span class="chip crit">high</span></td><td class="num">第42条2項</td></tr>
+        <tr><td>接道義務</td><td>常に</td><td><span class="chip warn">medium</span></td><td class="num">第43条</td></tr>
+        <tr><td>自治体条例・地区計画</td><td>常に</td><td><span class="chip crit">high</span></td><td class="num">第68条の2</td></tr>
+        <tr><td>敷地確定後の再チェック</td><td><code>has_land = false</code></td><td><span class="chip crit">high</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>状態は2つではなく3つ</h3>
+  <div class="layers">
+    <div class="layer"><span class="tier">ok</span><strong>適合</strong><p>数値が上限内に収まっています。</p></div>
+    <div class="layer"><span class="tier">ng</span><strong>不適合の可能性</strong><p>数値が上限を超過しています。</p></div>
+    <div class="layer"><span class="tier">?</span><strong>判定材料不足・データ矛盾</strong><p>敷地面積や延床面積が読み取れない場合、<strong>または間取りデータが自己矛盾している場合</strong>です。この状態では決して「適合」を出しません。詳細は <a href="#issues">10 章</a>の坪／㎡ 問題を参照してください。</p></div>
+  </div>
+
+  <h3>敷地情報の取得元（LAW-1）</h3>
+  <p>4段階のフォールバックです。どの段を使ったかは出力（<code>site_info.source</code>）に明示され、何を仮定したかもすべて <code>assumptions</code> に記録されます。</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="num">優先</th><th><code>source</code></th><th>取得元</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td><code>user_input</code></td><td>ユーザー発話から LLM が抽出した値</td></tr>
+        <tr><td class="num">2</td><td><code>reinfolib</code></td><td>不動産情報ライブラリ API（<code>REINFOLIB_API_KEY</code> 設定時のみ照会）</td></tr>
+        <tr><td class="num">3</td><td><code>preset</code></td><td>対象自治体のプリセット値（要件定義書 §12：対象自治体を1つに限定）</td></tr>
+        <tr><td class="num">4</td><td><code>assumed</code></td><td>標準的な分譲地の仮定値（132㎡ / 第一種住居地域 / 建ぺい60% / 容積200% / 幅員4m）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="label">オフラインでも動作します</span>
+    <p>API キー未設定、API 障害、タイムアウトのいずれの場合も、例外を投げずに静かに次の段へフォールバックします。これは NFR-06 の要求（会場のネットワーク断でもデモを完走できること）に対応するものです。</p>
+  </div>
+
+  <h3>自律修正ループ（既定は無効）</h3>
+  <p><code>SUMAI_LEGAL_AUTOFIX=1</code> のとき、法規NG が出ると上限値を制約として間取り生成AI へ差し戻し、再生成して再判定します。無限ループ防止のため最大1回で打ち切ります（NFR-07）。実機で確認済みの挙動：planning は2回呼ばれ、敷地照会は1回のみ（再利用）、応答に重複表示はありません。</p>
+  <p>既定を無効にしているのは、間取り生成が2回走るため所要時間が倍になるからです。デモの見せ場として使うときに有効化してください。</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="extend">
+  <h2><span class="sec-num">08</span>エージェントの追加</h2>
+
+  <p>見積AI（EST-1〜4）とメーカー推薦AI（MKR-1〜6）は以下の5手順で接続できます。グラフの分岐ロジックを触る必要はありません。</p>
+
+  <ol class="steps">
+    <li>
+      <h3>出力スキーマを定義する</h3>
+      <p><code>app/schemas/</code> に追加します。<code>legal.py</code> と同じ書式（Pydantic v2 ＋ 日本語 <code>description</code>）に揃えてください。</p>
+    </li>
+    <li>
+      <h3>エージェント本体を実装する</h3>
+      <p><code>app/agents/estimate_agent.py</code> に2つの関数を置きます。<code>run_estimate()</code> が構造化結果を返し、<code>build_estimate_reply()</code> が説明文を返します。<strong>LLM は引数で受け取る純関数</strong>にすると、テストでモックできます。</p>
+    </li>
+    <li>
+      <h3>state にスロットを追加する</h3>
+      <p><code>app/agents/state.py</code> の <code>SumaiState</code> に、結果の格納先を1行追加します。</p>
+    </li>
+    <li>
+      <h3>ノードを書き、1行登録する</h3>
+      <figure class="term">
+        <figcaption>app/agents/orchestrator.py</figcaption>
+<pre><code>POST_HEARING_STEPS = [
+    AgentStep("planning", "planning", planning_node),
+    AgentStep("legal",    "legal",    legal_node, route_override=_legal_autofix_route),
+    AgentStep("estimate", "estimate", estimate_node),   <span class="c"># ← この1行を追加</span>
+]</code></pre>
+      </figure>
+      <p>ノード関数は結果を state のスロットに入れ、説明文を <code>section("estimate", "概算見積", markdown)</code> で返します。連結と免責の付与は <code>compose_node</code> が一括で行います。</p>
+    </li>
+    <li>
+      <h3>外部インターフェースに繋ぐ</h3>
+      <p><code>app/schemas/artifact.py</code> と <code>app/api/chat.py</code> の <code>ChatResponse</code> にそれぞれ1項目追加します。</p>
+    </li>
+  </ol>
+
+  <div class="note">
+    <span class="label">AgentStep の2つのオプション</span>
+    <p><code>is_enabled</code> が <code>False</code> を返すとそのステップを飛ばします（条件付き実行）。<code>route_override</code> がノード名を返すとそこへ遷移します。生成→検査→修正の逆流に使うもので、見積AI の「予算超過 → 再生成」も同じ口を再利用できます。</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="test">
+  <h2><span class="sec-num">09</span>テスト</h2>
+
+  <p>すべて LLM をモックしているため <strong>Ollama は不要</strong>で、数秒で完了します。</p>
+  <figure class="term">
+    <figcaption>ターミナル</figcaption>
+<pre><code>PY -m pytest tests/ -v</code></pre>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>ファイル</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>test_acceptance.py</code></td><td>MVP 受入基準（AC-1〜3）</td></tr>
+        <tr><td><code>test_legal.py</code></td><td>法規チェックAI（LAW-1〜4）、判定式、要確認フラグ、3つの状態</td></tr>
+        <tr><td><code>test_pipeline.py</code></td><td>順序解決、応答合成、重複排除、修正ループの停止性</td></tr>
+        <tr><td><code>test_area_utils.py</code></td><td>面積の単位補正（実機で観測された誤りをすべてテストケース化）</td></tr>
+        <tr><td><code>test_llm_cache.py</code></td><td>キャッシュの4モード、キーの性質、壊れたキャッシュへの耐性、実機を呼ばないことの確認</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section id="issues">
+  <h2><span class="sec-num">10</span>既知の問題と対処</h2>
+
+  <h3>① 応答時間 — CPU 推論では実演に耐えません</h3>
+
+  <p>Ollama が GPU を使えるのは NVIDIA（CUDA）と AMD（ROCm）のみです。それ以外の環境では CPU 推論となり、開発機（14コア CPU / メモリ 15 GB / GPU なし）での実測は次のとおりでした。</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>実測項目</th><th class="num">qwen2.5:14b</th><th class="num">qwen2.5:7b</th></tr></thead>
+      <tbody>
+        <tr><td>生成速度</td><td class="num">約 5.2 tok/s</td><td class="num">—</td></tr>
+        <tr><td>ヒアリング 1ターン</td><td class="num">約 160〜220 秒</td><td class="num">244 秒</td></tr>
+        <tr><td>間取り生成 1回（最良）</td><td class="num">762 秒 ≈ 13 分</td><td class="num">366 秒 ≈ 6 分</td></tr>
+        <tr><td>間取り生成 1回（最悪）</td><td class="num">2332 秒 ≈ 39 分</td><td class="num">未計測</td></tr>
+        <tr><td>モデルのロード（アンロード後）</td><td class="num">約 100 秒</td><td class="num">—</td></tr>
+        <tr><td><strong>生成された間取りの案数</strong></td><td class="num"><span class="chip ok">3 案</span></td><td class="num"><span class="chip crit">1 案</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>14b の 3 倍のばらつきは CPU の速度変動ではなく<strong>メモリ不足によるページング</strong>が原因です。14b は 9 GB の重みに加えて KV キャッシュを必要とするため、実メモリが 16 GB を下回る環境では所要時間が大きく揺れます。</p>
+
+  <div class="note crit">
+    <span class="label">軽量モデルへの変更は解決策になりません</span>
+    <p>同一シナリオ（ペルソナC）を <code>qwen2.5:7b</code> で計測したところ、<strong>間取りが 3 案ではなく 1 案しか生成されませんでした</strong>。速度は 2〜6 倍になりますが、指示追従が落ちて要件（3 案提示）を満たせません。<strong>デモは品質を確認したモデル ＋ <a href="#replay">応答キャッシュ</a></strong>という組み合わせで行ってください。開発中は <code>qwen2.5:3b</code> に統一していますが、3b は 7b よりさらに小さいため <strong>3 案提示の品質は要検証</strong>です。</p>
+  </div>
+
+  <h4>取れる対策</h4>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>対策</th><th>効果</th><th>代償</th></tr></thead>
+      <tbody>
+        <tr><td><strong>応答キャッシュ（NFR-06）</strong><br><span class="chip ok">実装済</span></td><td><strong>デモ時は秒単位。毎回完全に同一。オフラインでも完走</strong></td><td>事前に一度作成する時間が必要 → <a href="#replay">05 章</a></td></tr>
+        <tr><td><code>keep_alive</code> を延ばす</td><td>毎回の約 100 秒のロードを省ける</td><td>モデルがメモリを占有し続ける</td></tr>
+        <tr><td>使用メモリを増やす</td><td>最悪ケースのばらつきが解消し、下限付近に安定する</td><td><strong>下限そのものは変わりません</strong></td></tr>
+        <tr><td>出力トークンを削る</td><td>時間がほぼ比例して短縮（現状 <code>num_predict=4096</code>）</td><td>案の説明文が短くなる</td></tr>
+        <tr><td>小さい量子化（<code>q3_K_M</code> 等）</td><td>約 7 GB でメモリ圧迫が減る</td><td>重みの精度がやや下がる</td></tr>
+        <tr><td><code>qwen2.5:7b</code> に変更</td><td>間取り生成が 366 秒に短縮</td><td><strong>案が 1 案に減る（上記）</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note crit">
+    <span class="label">メモリ増設について誤解しやすい点</span>
+    <p>メモリを増やしても<strong>ばらつきが消えるだけで、下限は変わりません</strong>。762 秒という下限は CPU の演算能力で決まるためです。したがってメモリ調整の価値は「所要時間が予測可能になること」であり、「デモに使える速度になること」ではありません。<strong>デモに使える速度にする唯一の方法は <a href="#replay">05 章の応答キャッシュ</a>です。</strong></p>
+  </div>
+
+  <hr>
+
+  <h3>② 坪／㎡ の単位取り違え — 3層の防御を実装済み</h3>
+
+  <p>実機検証で見つかった実際の問題です。「35坪」（≒116㎡）という要望に対し、qwen2.5:14b は <code>約35㎡（約10.5坪）</code> と出力しました。坪の数値をそのまま㎡欄に書き、さらに階数まで同じフィールドに混入させていました。部屋面積の合計は 65㎡ 以上あり、「延床 35㎡」と自己矛盾しています。</p>
+
+  <div class="note crit">
+    <span class="label">当時の結果</span>
+    <p>法規チェックの算術は入力に対して正しく動いていましたが、入力そのものが壊れていたため、建ぺい率 11.6%・容積率 21.2% となり3案すべてが「✅ 適合」になりました。<strong>誤った安心感を与えていた</strong>わけで、法規チェックとして最も避けるべき状態です。</p>
+  </div>
+
+  <p>3回の実測により、<strong>プロンプトだけでは信頼できない</strong>ことが確認されました。</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="num">#</th><th>プロンプト</th><th>出力</th><th>結果</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>元のまま</td><td class="num">35 / 40 / 38㎡</td><td>単位が誤り。階数も混入</td></tr>
+        <tr><td class="num">2</td><td>単位ルールを追加</td><td class="num">116㎡ ×3</td><td>単位は直ったが3案が同一に</td></tr>
+        <tr><td class="num">3</td><td>差別化ルールも追加</td><td class="num">30 / 40 / 35㎡</td><td>差別化されたが単位が誤りに戻る</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>そこで要件定義書（KH案 §9.2.2「再アライメント＝ルールベースでの補正」）の方針に沿い、3層構成にしました。</p>
+
+  <div class="layers">
+    <div class="layer">
+      <span class="tier">1</span>
+      <strong>プロンプトの強化</strong>
+      <p><code>planning_agent</code> に明示：1坪 = 約3.31㎡、<code>floors</code> に面積を書かない、3案の面積に差をつける、延床は部屋面積の合計を上回る。</p>
+    </div>
+    <div class="layer">
+      <span class="tier">2</span>
+      <strong>決定論的な単位補正</strong>
+      <p><code>area_utils.normalize_total_floor_area()</code>：部屋面積の合計（畳→㎡換算）が延床を超えている場合、数値を<strong>坪として再解釈</strong>します。再解釈して整合し、かつ戸建てとして妥当な範囲（40〜400㎡）に収まる場合のみ補正します。補正した事実は <code>summary</code> に明記し、隠しません。</p>
+    </div>
+    <div class="layer">
+      <span class="tier">3</span>
+      <strong>整合性チェック（最終防衛線）</strong>
+      <p><code>legal_rules.check_plan_consistency()</code>：補正できない矛盾データは、建ぺい率・容積率を <code>unknown</code> とし、<span class="chip crit">high</span>「間取りデータの整合性」フラグを立てます。<strong>決して「適合」とは言いません。</strong></p>
+    </div>
+  </div>
+
+  <p>結果として、以前の壊れたデータは正しく3件の <code>unknown</code> になります。実機の最終出力は <code>120 / 135 / 130㎡</code> で、3案が差別化され、全案が整合し、判定も確定しました（建ぺい率 40〜45%／上限50%、容積率 72.7〜81.8%／上限100%、高さ 8m／上限10m）。</p>
+
+  <hr>
+
+  <h3>③ リポジトリ管理：<code>.env</code> が git 追跡下にあります</h3>
+
+  <p>既存の問題で、今回の変更で持ち込んだものではありません。ただし <code>REINFOLIB_API_KEY</code> が <code>.env</code> に入ったため、<strong>実際のキーを記入した時点でコミットされてしまいます</strong>（NFR-03「API キー等をリポジトリに含めない」に違反）。また <code>.pyc</code> が1つ追跡リストに残っています（<code>.gitignore</code> に <code>*.pyc</code> はありますが、既に追跡済みのファイルには効きません）。</p>
+
+  <figure class="term">
+    <figcaption>確認の上で実行してください</figcaption>
+<pre><code>printf '.env\n' &gt;&gt; sumai-agent/.gitignore
+git rm --cached sumai-agent/.env
+git rm --cached sumai-agent/tests/__pycache__/test_acceptance.cpython-313-pytest-9.1.1.pyc</code></pre>
+  </figure>
+
+  <p>他メンバーの checkout に影響します（各自 <code>.env.example</code> から <code>.env</code> を作る必要があり、README に手順は記載済み）。そのため<strong>独断では実行していません</strong>。</p>
+
+  <hr>
+
+  
+  <h3>④ その他のトラブルシューティング</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>症状</th><th>原因と対処</th></tr></thead>
+      <tbody>
+        <tr><td>画面に「<strong>LLM（Ollama）に接続できません</strong>」と出る</td><td>Ollama が起動していません。<code>ollama serve</code> で起動し、<code>curl http://localhost:11434/api/version</code> で確認してください。API は <code>503</code> を返します。</td></tr>
+        <tr><td>デモのプリセットは動くのに、<strong>自由に入力した瞬間だけ</strong>エラーになる</td><td>キャッシュはデモ用の文言に対してのみ作成されています。プリセットはキャッシュから即答（1秒未満）されますが、それ以外の入力は実機の推論が必要なため Ollama の起動が必須です。<a href="#replay">05 章</a>参照。</td></tr>
+        <tr><td>「<strong>応答キャッシュがありません</strong>」と出る</td><td><code>SUMAI_LLM_CACHE=replay</code> はキャッシュのみで動作し実機を呼びません。自由な入力を試すときは <code>auto</code> にしてください。</td></tr>
+        <tr><td>アーティファクトが 404 になる</td><td>セッションは LangGraph の<strong>インメモリ</strong>チェックポイントにあり、サーバー再起動で消えます。同一プロセス内で発行された <code>session_id</code> のみ取得できます。</td></tr>
+        <tr><td>コードを変更したのに反映されない</td><td>uvicorn の <code>reload</code> はファイル監視に依存します。ネットワーク越し・仮想環境越しのファイル編集では通知が届かないことがあるため、アプリを手動で再起動してください。</td></tr>
+        <tr><td>間取りが毎回変わる</td><td><code>SUMAI_TEMPERATURE</code>（既定 0.3）を下げると揺れが減ります。完全に固定したい場合は <a href="#replay">05 章の応答キャッシュ</a>を使ってください。</td></tr>
+        <tr><td>キャッシュしたのに使われない</td><td>モデル名・発話の文言・プロンプトのいずれかが作成時と違います → <a href="#replay">05 章「キャッシュが命中する条件」</a></td></tr>
+        <tr><td>起動時に <code>Deserializing unregistered type</code> の警告が出る</td><td>Pydantic モデルをチェックポイントに保存しているためで、既存の挙動です。現在は警告のみですが、将来のバージョンでブロックされるため、その際は <code>allowed_msgpack_modules</code> の設定が必要になります。</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  スマイエージェント / 法規チェックAI — 要件定義書 v1.0 §7.6（LAW-1〜4）対応 · 全出力は概算・要専門家確認
+</footer>
+
+</div>

@@ -298,10 +298,13 @@
   .cta-banner h3 { font-size: 0.9rem; margin-bottom: 6px; }
   .cta-banner p { font-size: 0.8rem; opacity: 0.9; margin-bottom: 12px; }
   .maker-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* メーカー公式サイトへのリンク。<a> なので押せば実際に遷移する */
   .maker-chip {
+    display: inline-block;
     background: rgba(255,255,255,0.15);
     border: 1px solid rgba(255,255,255,0.3);
     color: #fff;
+    text-decoration: none;
     padding: 4px 10px;
     border-radius: 16px;
     font-size: 0.76rem;
@@ -309,6 +312,7 @@
     transition: background 0.15s;
   }
   .maker-chip:hover { background: rgba(255,255,255,0.28); }
+  .maker-chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
   /* ─── ユーティリティ ─── */
   .hidden { display: none !important; }
@@ -341,6 +345,91 @@
   /* ─── 右カラム（間取り表示パネル） ─── */
   .right-panel { width: 220px; flex-shrink: 0; }
   @media (max-width: 900px) { .right-panel { display: none; } }
+
+  /* ─── 法規チェックパネル ─── */
+  .site-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 4px 12px;
+    font-size: 0.78rem;
+    background: #f7faff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .site-grid div { display: flex; gap: 6px; }
+  .site-grid .site-label { color: #64748b; flex-shrink: 0; }
+  .site-grid .site-value { color: #1e293b; font-weight: 600; }
+  .site-source {
+    grid-column: 1 / -1;
+    font-size: 0.73rem;
+    color: #94a3b8;
+    border-top: 1px dashed #d1dfe8;
+    padding-top: 6px;
+    margin-top: 2px;
+    display: block !important;
+  }
+
+  .legal-plan {
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .legal-plan.status-ok { border-left: 4px solid #16a34a; }
+  .legal-plan.status-ng { border-left: 4px solid #dc2626; }
+  .legal-plan.status-unknown { border-left: 4px solid #94a3b8; }
+  .legal-plan-head {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1a4a7a;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .legal-status-badge {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 700;
+  }
+  .status-ok .legal-status-badge { background: #dcfce7; color: #166534; }
+  .status-ng .legal-status-badge { background: #fee2e2; color: #991b1b; }
+  .status-unknown .legal-status-badge { background: #f1f5f9; color: #475569; }
+
+  .legal-items { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+  .legal-items th, .legal-items td {
+    text-align: left;
+    padding: 3px 6px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+  }
+  .legal-items th { color: #64748b; font-weight: 600; font-size: 0.73rem; }
+  .legal-items .col-basis { color: #94a3b8; font-size: 0.72rem; white-space: nowrap; }
+
+  .flag-list { font-size: 0.77rem; color: #475569; }
+  .flag-list li { list-style: none; padding: 3px 0; line-height: 1.5; }
+  .flag-item-name { font-weight: 700; color: #1a4a7a; }
+  .flag-basis { color: #94a3b8; font-size: 0.72rem; }
+  .legal-disclaimer {
+    font-size: 0.74rem;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+  .legal-subhead {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #475569;
+    margin: 12px 0 6px;
+  }
 </style>
 </head>
 <body>
@@ -382,7 +471,8 @@
         <div class="bubble">
           <strong>こんにちは！スマイエージェントです。</strong><br><br>
           住まいづくりのご相談を、AIがお手伝いします。<br><br>
-          ご要望をお気軽にお話しください。家族構成・ご予算・土地の有無・希望の広さなどを教えていただければ、<strong>コンセプトの異なる3つの間取り案</strong>をご提案します！<br><br>
+          ご要望をお気軽にお話しください。家族構成・ご予算・土地の有無・希望の広さなどを教えていただければ、<strong>コンセプトの異なる3つの間取り案</strong>をご提案し、<strong>建ぺい率・容積率・高さの法規チェック</strong>まで行います！<br><br>
+          土地をお持ちの場合は<strong>敷地の広さ・用途地域・前面道路の幅</strong>も教えていただけると、より精度の高い法規チェックができます。<br><br>
           左のパネルから「デモシナリオ」を選ぶと、サンプルで試すこともできます。
         </div>
       </div>
@@ -391,10 +481,13 @@
     <!-- 間取り案表示エリア -->
     <div id="plans-container" class="hidden" style="margin-top:10px;"></div>
 
+    <!-- 法規チェック結果表示エリア -->
+    <div id="legal-container" class="hidden" style="margin-top:10px;"></div>
+
     <!-- 送客バナー -->
     <div id="cta-banner" class="cta-banner hidden">
       <h3>📋 ハウスメーカーへの相談・来場予約</h3>
-      <p>ご提案した間取り案を持参すれば、商談がスムーズになります。まずは気になるメーカーを確認してみましょう。</p>
+      <p>ご提案した間取り案を持参すれば、商談がスムーズになります。メーカー名を押すと公式サイトが別タブで開きます（各社の得意分野と価格帯はマウスを乗せると表示されます）。</p>
       <div id="maker-chips" class="maker-chips"></div>
     </div>
 
@@ -424,17 +517,28 @@
         <div id="step-planning" style="padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;">
           ② 間取り生成
         </div>
+        <div id="step-legal" style="padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;">
+          ③ 法規チェック
+        </div>
         <div id="step-followup" style="padding:6px 8px;border-radius:6px;color:#94a3b8;">
-          ③ 送客
+          ④ 送客
         </div>
       </div>
+    </div>
+
+    <div class="card" id="artifact-card" style="display:none;">
+      <h2>成果物</h2>
+      <div style="font-size:0.76rem;color:#475569;line-height:1.6;margin-bottom:8px;">
+        要件・間取り・法規チェック結果をまとめた機械可読データ（JSON）です。
+      </div>
+      <a id="artifact-link" href="#" target="_blank" rel="noopener"
+         style="font-size:0.78rem;color:#2563a8;font-weight:600;">📄 アーティファクトを開く</a>
     </div>
 
     <div class="card" id="phase2-card">
       <h2>Phase 2 予定</h2>
       <div style="font-size:0.76rem;color:#94a3b8;line-height:1.7;">
-        ④ 概算見積AI<br>
-        ⑤ 法規チェックAI<br>
+        ⑤ 概算見積AI<br>
         ⑥ メーカー推薦AI<br>
         ⑦ 来場予約連携
       </div>
@@ -617,41 +721,175 @@ function renderPlans(plans) {
 }
 
 function escHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // 属性値にも埋め込むため引用符もエスケープする
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-function updateFlowStep(stage) {
-  const steps = { hearing: 'step-hearing', planning: 'step-planning', follow_up: 'step-followup' };
-  const active = '#e8f0fa';
-  const done = '#dcfce7';
-  const inactiveColor = '#94a3b8';
+// ─── 法規チェック結果の表示 ─────────────────────────
+const LEGAL_STATUS_LABEL = {
+  ok: '✅ 適合',
+  ng: '⚠️ 不適合の可能性',
+  unknown: '❓ 判定材料不足',
+};
+const SEVERITY_MARK = { high: '🔴', medium: '🟡', low: '⚪' };
+const SITE_SOURCE_LABEL = {
+  user_input: 'ご入力内容',
+  reinfolib: '不動産情報ライブラリ（国土交通省）',
+  preset: '対象自治体のプリセットデータ',
+  assumed: '標準的な敷地条件の仮定値',
+};
 
-  document.getElementById('step-hearing').style.cssText = '';
-  document.getElementById('step-planning').style.cssText = '';
-  document.getElementById('step-followup').style.cssText = '';
+function renderSiteInfo(site) {
+  if (!site) return '';
+  const fmt = (v, unit) => (v === null || v === undefined ? '未確認' : `${v}${unit || ''}`);
+  const tsubo = site.site_area_sqm ? `（約${(site.site_area_sqm / 3.305785).toFixed(1)}坪）` : '';
+  const rows = [
+    ['所在地', escHtml(site.address || '未確定')],
+    ['敷地面積', site.site_area_sqm ? `${site.site_area_sqm}㎡${tsubo}` : '未確定'],
+    ['用途地域', escHtml(site.zoning || '未確認')],
+    ['指定建ぺい率', fmt(site.building_coverage_ratio, '%')],
+    ['指定容積率', fmt(site.floor_area_ratio, '%')],
+    ['前面道路幅員', fmt(site.road_width_m, 'm')],
+    ['防火地域', escHtml(site.fire_zone || '未確認')],
+  ];
+  const cells = rows.map(([label, value]) =>
+    `<div><span class="site-label">${label}</span><span class="site-value">${value}</span></div>`
+  ).join('');
+  const source = SITE_SOURCE_LABEL[site.source] || site.source;
+  const assumptions = (site.assumptions && site.assumptions.length)
+    ? ` ／ 前提・仮定：${escHtml(site.assumptions.join(' ／ '))}`
+    : '';
+  return `<div class="site-grid">${cells}
+    <span class="site-source">データ出典：${escHtml(source)}${assumptions}</span>
+  </div>`;
+}
 
-  if (stage === 'hearing') {
-    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;';
-    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;';
-  } else if (stage === 'planning') {
-    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;color:#94a3b8;';
-  } else if (stage === 'follow_up') {
-    document.getElementById('step-hearing').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-planning').style.cssText = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
-    document.getElementById('step-followup').style.cssText = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;';
+function renderLegal(site, checks) {
+  const container = document.getElementById('legal-container');
+  if (!checks || checks.length === 0) {
+    container.classList.add('hidden');
+    container.innerHTML = '';
+    return;
   }
+  container.classList.remove('hidden');
+
+  // 全案に共通する要確認フラグ（＝敷地に対する制限）の項目名を求める。
+  // 案ごとに固有のフラグ（間取りデータの矛盾など）はその案の中に表示する。
+  const sharedItems = checks.reduce((acc, c) => {
+    const names = new Set((c.manual_flags || []).map(f => f.item));
+    return acc === null ? names : new Set([...acc].filter(n => names.has(n)));
+  }, null) || new Set();
+
+  const plansHtml = checks.map(check => {
+    const itemsHtml = check.items.map(item => {
+      const mark = { ok: '✅', ng: '⚠️', unknown: '❓' }[item.status] || '・';
+      return `<tr>
+        <td>${mark} ${escHtml(item.item)}</td>
+        <td>${escHtml(item.actual || '判定材料が不足')}</td>
+        <td>${escHtml(item.limit || '—')}</td>
+        <td>${escHtml(item.margin || '—')}</td>
+        <td class="col-basis">${escHtml(item.basis)}</td>
+      </tr>`;
+    }).join('');
+
+    const ownFlags = (check.manual_flags || []).filter(f => !sharedItems.has(f.item));
+    const ownFlagsHtml = ownFlags.length ? `
+      <ul class="flag-list" style="margin-top:6px;">
+        ${ownFlags.map(f => `<li>${SEVERITY_MARK[f.severity] || '・'}
+          <span class="flag-item-name">${escHtml(f.item)}</span> — ${escHtml(f.reason)}</li>`).join('')}
+      </ul>` : '';
+
+    return `<div class="legal-plan status-${escHtml(check.status)}">
+      <div class="legal-plan-head">
+        案${check.plan_index}：${escHtml(check.plan_concept)}
+        <span class="legal-status-badge">${LEGAL_STATUS_LABEL[check.status] || check.status}</span>
+      </div>
+      <table class="legal-items">
+        <thead><tr><th>項目</th><th>判定値</th><th>上限</th><th>余裕／超過</th><th>根拠</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      ${ownFlagsHtml}
+      <div style="font-size:0.76rem;color:#64748b;margin-top:6px;">${escHtml(check.summary)}</div>
+    </div>`;
+  }).join('');
+
+  // 敷地に対する制限は全案共通なので1回だけ表示する
+  const flags = (checks[0].manual_flags || []).filter(f => sharedItems.has(f.item));
+  const flagsHtml = flags.length ? `
+    <div class="legal-subhead">要確認項目（専門家の確認が必要／自動判定の対象外）</div>
+    <ul class="flag-list">
+      ${flags.map(f => `<li>${SEVERITY_MARK[f.severity] || '・'}
+        <span class="flag-item-name">${escHtml(f.item)}</span> — ${escHtml(f.reason)}
+        <span class="flag-basis">〔${escHtml(f.basis)}〕</span></li>`).join('')}
+    </ul>` : '';
+
+  container.innerHTML = `
+    <div class="card" style="padding:14px;">
+      <h2 style="font-size:0.82rem;font-weight:700;color:#1a4a7a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e8f0fa;">
+        ⚖️ 法規チェック結果（参考判定）
+      </h2>
+      <div class="legal-subhead" style="margin-top:0;">判定に用いた敷地条件</div>
+      ${renderSiteInfo(site)}
+      <div class="legal-subhead">自動判定（建ぺい率・容積率・高さ）</div>
+      ${plansHtml}
+      ${flagsHtml}
+      <div class="legal-disclaimer">
+        ⚠️ 本判定はAIによる参考情報であり、適法性を保証するものではありません。
+        斜線制限・日影規制・自治体条例・防火地域の仕様規制は自動判定の対象外です。
+        設計・着工前に必ず建築士または指定確認検査機関にご確認ください。
+      </div>
+    </div>`;
+}
+
+// ─── フロー表示 ───────────────────────────────────
+const FLOW_STEPS = ['step-hearing', 'step-planning', 'step-legal', 'step-followup'];
+const STEP_BASE = 'padding:6px 8px;border-radius:6px;';
+const STEP_DONE = STEP_BASE + 'background:#dcfce7;color:#166534;font-weight:700;';
+const STEP_ACTIVE = STEP_BASE + 'background:#e8f0fa;color:#1a4a7a;font-weight:700;';
+const STEP_IDLE = STEP_BASE + 'color:#94a3b8;';
+
+/**
+ * フロー表示を更新する。
+ * activeIndex より前を完了、activeIndex を進行中、それ以降を未着手として描画する。
+ */
+function updateFlowStep(stage, hasLegal) {
+  let activeIndex = 0;
+  if (stage === 'planning') activeIndex = 1;
+  else if (stage === 'legal') activeIndex = 2;
+  else if (stage === 'follow_up') activeIndex = 3;
+
+  // 法規チェック結果が未取得のまま送客段階に進んだ場合（法規ステップ無効時）は③を飛ばす
+  FLOW_STEPS.forEach((id, index) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    let style = index < activeIndex ? STEP_DONE : index === activeIndex ? STEP_ACTIVE : STEP_IDLE;
+    if (id === 'step-legal' && activeIndex === 3 && !hasLegal) style = STEP_IDLE;
+    el.style.cssText = style + (index < FLOW_STEPS.length - 1 ? 'margin-bottom:4px;' : '');
+  });
+}
+
+function showArtifactLink() {
+  const card = document.getElementById('artifact-card');
+  const link = document.getElementById('artifact-link');
+  link.href = `${API_BASE}/artifact/${encodeURIComponent(sessionId)}`;
+  card.style.display = '';
 }
 
 async function showCtaBanner() {
   const makers = await loadMakers();
   const banner = document.getElementById('cta-banner');
   const chips = document.getElementById('maker-chips');
-  chips.innerHTML = makers.map(m =>
-    `<span class="maker-chip" title="${escHtml(m.price_band)}">${escHtml(m.name)}</span>`
-  ).join('');
+  chips.innerHTML = makers.map(m => {
+    // 得意分野と価格帯をツールチップに出し、押したら公式サイトを別タブで開く。
+    // href は http(s) のみ許可する（javascript: 等を弾く）
+    const tip = [m.price_band, (m.strengths || []).join(' / ')].filter(Boolean).join('｜');
+    const url = /^https?:\/\//.test(m.website || '') ? m.website : null;
+    if (!url) return `<span class="maker-chip" title="${escHtml(tip)}">${escHtml(m.name)}</span>`;
+    return `<a class="maker-chip" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer"`
+         + ` title="${escHtml(tip)}｜公式サイトを開く">${escHtml(m.name)} ↗</a>`;
+  }).join('');
   banner.classList.remove('hidden');
 }
 
@@ -682,15 +920,24 @@ async function handleSend() {
     if (data.floor_plans && data.floor_plans.length > 0) {
       renderPlans(data.floor_plans);
     }
+    const hasLegal = !!(data.legal_checks && data.legal_checks.length > 0);
+    if (hasLegal) {
+      renderLegal(data.site_info, data.legal_checks);
+    }
     if (data.done) {
-      updateFlowStep('follow_up');
+      updateFlowStep('follow_up', hasLegal);
       showCtaBanner();
+      showArtifactLink();
     } else {
-      updateFlowStep(data.stage || 'hearing');
+      updateFlowStep(data.stage || 'hearing', hasLegal);
     }
   } catch (e) {
     removeTyping();
-    appendMessage('ai', `⚠️ エラーが発生しました: ${e.message}\n\nしばらく待ってから再試行してください。`);
+    // サーバー側が対処方法まで示している場合（末尾が「〜してください」）は、
+    // 再試行を促す定型文を足さない（Ollama 停止時は待っても解決しないため）
+    const actionable = /ください。?$/.test(e.message || '');
+    appendMessage('ai', `⚠️ エラーが発生しました: ${e.message}`
+      + (actionable ? '' : '\n\nしばらく待ってから再試行してください。'));
   } finally {
     isLoading = false;
     document.getElementById('send-btn').disabled = false;
@@ -728,8 +975,11 @@ document.getElementById('new-session-btn').addEventListener('click', () => {
   document.getElementById('requirements-panel').innerHTML = '<p style="font-size:0.78rem;color:#94a3b8;">ヒアリング前</p>';
   document.getElementById('plans-container').classList.add('hidden');
   document.getElementById('plans-container').innerHTML = '';
+  document.getElementById('legal-container').classList.add('hidden');
+  document.getElementById('legal-container').innerHTML = '';
   document.getElementById('cta-banner').classList.add('hidden');
-  updateFlowStep('hearing');
+  document.getElementById('artifact-card').style.display = 'none';
+  updateFlowStep('hearing', false);
 });
 
 // ─── 初期化 ─────────────────────────────────────────────────

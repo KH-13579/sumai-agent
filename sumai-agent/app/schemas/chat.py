@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.requirements import RequirementBaseline
 from app.schemas.floorplan import FloorPlan
+from app.schemas.legal import PlanLegalCheck, SiteInfo
 
 
 class ChatRequest(BaseModel):
@@ -16,5 +17,7 @@ class ChatResponse(BaseModel):
     reply: str = Field(description="自然言語の応答（ユーザー向け）")
     requirements: Optional[RequirementBaseline] = Field(None, description="現在の住宅要件書")
     floor_plans: Optional[List[FloorPlan]] = Field(None, description="生成した間取り案")
-    stage: Literal["hearing", "planning", "follow_up"] = Field(description="現在のフェーズ")
+    site_info: Optional[SiteInfo] = Field(None, description="法規チェックに用いた敷地情報")
+    legal_checks: Optional[List[PlanLegalCheck]] = Field(None, description="間取り案ごとの法規チェック結果")
+    stage: Literal["hearing", "planning", "legal", "follow_up"] = Field(description="現在のフェーズ")
     done: bool = Field(False, description="間取り提示まで完了したか")
