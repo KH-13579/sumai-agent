@@ -1,0 +1,10 @@
+# エディタのローカル履歴拡張機能（VSCode Local History 等）
+.history/
+.lh/
+
+# Claude Code
+CLAUDE.md
+
+# OS
+.DS_Store
+Thumbs.db

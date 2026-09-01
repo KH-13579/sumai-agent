@@ -63,6 +63,25 @@ _FIELD_LABELS = {
 }
 
 
+# LLM は「読み取れない項目は null」という指示に反して、"未定" のような
+# プレースホルダ文字列を入れてくることがある（実測で発生）。これを値として扱うと
+# 「項目は埋まっているが中身が無い」状態のまま間取り生成に進んでしまうため、未取得に戻す。
+_PLACEHOLDER_VALUES = {
+    "未定", "未確認", "未指定", "不明", "なし", "特になし", "特にない",
+    "null", "none", "n/a", "-", "―", "？", "?", "",
+}
+
+
+def _clean_value(value):
+    """プレースホルダ文字列を None に正規化する"""
+    if not isinstance(value, str):
+        return value
+    stripped = value.strip()
+    if stripped.lower() in _PLACEHOLDER_VALUES:
+        return None
+    return stripped or None
+
+
 def _format_known_requirements(known: RequirementBaseline | None) -> str:
     """既知の要件をプロンプト注入用のテキストに整形する"""
     if known is None:
@@ -118,14 +137,14 @@ def run_hearing(
 
     req_data = data.get("requirements", {})
     requirements = RequirementBaseline(
-        family_structure=req_data.get("family_structure"),
-        budget=req_data.get("budget"),
-        land_info=req_data.get("land_info"),
-        preferred_design=req_data.get("preferred_design"),
-        desired_size=req_data.get("desired_size"),
-        lifestyle_flow=req_data.get("lifestyle_flow"),
-        storage_needs=req_data.get("storage_needs"),
-        notes=req_data.get("notes"),
+        family_structure=_clean_value(req_data.get("family_structure")),
+        budget=_clean_value(req_data.get("budget")),
+        land_info=_clean_value(req_data.get("land_info")),
+        preferred_design=_clean_value(req_data.get("preferred_design")),
+        desired_size=_clean_value(req_data.get("desired_size")),
+        lifestyle_flow=_clean_value(req_data.get("lifestyle_flow")),
+        storage_needs=_clean_value(req_data.get("storage_needs")),
+        notes=_clean_value(req_data.get("notes")),
         is_complete=req_data.get("is_complete", False),
         missing_fields=req_data.get("missing_fields", []),
     )

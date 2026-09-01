@@ -7,6 +7,7 @@ import json
 
 from app.schemas.requirements import RequirementBaseline
 from app.schemas.floorplan import FloorPlan, Room, PlanningOutput
+from app.tools.area_utils import normalize_total_floor_area
 
 PLANNING_SYSTEM_PROMPT = """あなたは住宅設計の専門家AIです。
 ユーザーの住宅要件定義書をもとに、コンセプトの異なる3つの間取り案を提案します。
@@ -48,15 +49,35 @@ PLANNING_SYSTEM_PROMPT = """あなたは住宅設計の専門家AIです。
   "summary": "3案の比較サマリー文（200字程度）"
 }
 
+## 面積の書き方（厳守）
+後段の法規チェック（建ぺい率・容積率）がこの数値を使って計算するため、以下を必ず守る。
+
+- `total_floor_area` は **「約NNN㎡（約NN坪）」の形式のみ**。階数など他の情報を混ぜない
+- **1坪 = 約3.31㎡**。坪で要望された広さは㎡に換算して書く（例: 35坪 → 約116㎡。「約35㎡」と書くのは誤り）
+- **3案の延床面積は同じ値にしない**。コンセプトに応じて差をつける
+  （目安: コスパ重視は要望より約10%小さめ／広さ重視は約10〜20%大きめ／収納重視はほぼ要望どおり）
+- 延床面積は主要な部屋の面積合計を**必ず上回る**ようにする（廊下・階段・水回りを含むため）
+- 一般的な戸建ての延床面積は **80〜150㎡（24〜45坪）** 程度。この範囲を大きく外れる場合は要望を読み違えている
+- `floors` には階数のみを書く（例: "2階建て"）。面積を書かない
+- 部屋の広さは「18畳」「6畳×2」のように畳数で書く（1畳 ≈ 1.62㎡）
+
 ## 注意事項
 - 必ず有効なJSONのみを返す（前後に余分なテキストは不要）
 - 概算費用は必ず「概算・専門家確認を推奨」の前提で提示
-- 法規チェックは行わず「参考プランです」と明示する
+- 法規の厳密な判定は後段の法規チェックAIが行う。ここでは「参考プランです」と明示する
 """
 
 
-def run_planning(requirements: RequirementBaseline, llm: ChatOllama) -> PlanningOutput:
-    """住宅要件書をもとに間取り3案を生成する"""
+def run_planning(
+    requirements: RequirementBaseline,
+    llm: ChatOllama,
+    legal_constraints: str | None = None,
+) -> PlanningOutput:
+    """住宅要件書をもとに間取り3案を生成する
+
+    legal_constraints は法規チェックAIからの修正指示（自律修正ループの2周目）。
+    渡された場合は建ぺい率・容積率・高さの上限を守るようプロンプトに制約を追加する。
+    """
     req_summary = f"""
 ## 住宅要件書
 - 家族構成: {requirements.family_structure or "不明"}
@@ -70,6 +91,9 @@ def run_planning(requirements: RequirementBaseline, llm: ChatOllama) -> Planning
 
 上記の要件をもとに、コンセプトの異なる3つの間取り案を提案してください。
 """
+
+    if legal_constraints:
+        req_summary += "\n" + legal_constraints + "\n"
 
     messages = [
         SystemMessage(content=PLANNING_SYSTEM_PROMPT),
@@ -98,6 +122,7 @@ def run_planning(requirements: RequirementBaseline, llm: ChatOllama) -> Planning
         )
 
     plans = []
+    corrections: list[str] = []
     for p in data.get("plans", []):
         rooms = [
             Room(
@@ -107,10 +132,20 @@ def run_planning(requirements: RequirementBaseline, llm: ChatOllama) -> Planning
             )
             for r in p.get("rooms", [])
         ]
+
+        # LLM は坪の数値を㎡欄に書くことがある（例: 35坪 → "約35㎡"）。
+        # 後段の法規チェックが面積を数値として使うため、ここで決定論的に補正する。
+        concept = p.get("concept", "")
+        total_area, correction = normalize_total_floor_area(
+            p.get("total_floor_area", ""), [r.area for r in rooms]
+        )
+        if correction:
+            corrections.append(f"{concept}: {correction}")
+
         plans.append(
             FloorPlan(
-                concept=p.get("concept", ""),
-                total_floor_area=p.get("total_floor_area", ""),
+                concept=concept,
+                total_floor_area=total_area or "",
                 floors=p.get("floors", ""),
                 rooms=rooms,
                 layout_description=p.get("layout_description", ""),
@@ -119,7 +154,12 @@ def run_planning(requirements: RequirementBaseline, llm: ChatOllama) -> Planning
             )
         )
 
+    summary = data.get("summary", "")
+    if corrections:
+        # 補正した事実は隠さず出力に残す（説明可能性の担保）
+        summary += "\n\n※ 面積表記の自動補正: " + " / ".join(corrections)
+
     return PlanningOutput(
         plans=plans,
-        summary=data.get("summary", ""),
+        summary=summary,
     )
