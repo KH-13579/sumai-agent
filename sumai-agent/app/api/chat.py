@@ -110,7 +110,7 @@ async def chat(req: ChatRequest):
         floor_plans=result.get("floor_plans"),
         site_info=result.get("site_info"),
         legal_checks=result.get("legal_checks"),
-        maker_recommendations=result.get("maker_recommendations"),
+        maker_recommendation=result.get("maker_recommendation"),
         stage=result.get("stage", "hearing"),
         done=result.get("done", False),
     )
@@ -139,8 +139,8 @@ async def artifact(session_id: str):
         floor_plans=values.get("floor_plans") or [],
         site_info=values.get("site_info"),
         legal_checks=values.get("legal_checks") or [],
-        estimate=values.get("estimate"),
         maker_recommendation=values.get("maker_recommendation"),
+        estimate=values.get("estimate"),
         disclaimer=GLOBAL_DISCLAIMER,
     )
 

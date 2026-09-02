@@ -62,7 +62,6 @@ _ROOM_SIZE_REFERENCE = """## 部屋タイプ別の一般的な広さの目安（
 - 収納・WIC: 1〜3畳（約2〜5m2）
 - バルコニー: 2〜4畳（約3〜7m2）
 （1畳 ≒ 1.66m2 が目安）"""
-from app.tools.area_utils import normalize_total_floor_area
 
 PLANNING_SYSTEM_PROMPT = f"""あなたは住宅設計の専門家AIです。
 ユーザーの住宅要件定義書をもとに、コンセプトの異なる3つの間取り案を提案します。
@@ -91,27 +90,27 @@ PLANNING_SYSTEM_PROMPT = f"""あなたは住宅設計の専門家AIです。
 - estimated_cost: 概算費用レンジ（坪単価ベース: 木造60〜80万円/坪として概算）
 
 ## 出力フォーマット（必ずJSON形式で返す）
-{
+{{
   "plans": [
-    {
+    {{
       "concept": "コスパ重視案",
       "total_floor_area": "約100㎡（約30坪）",
       "floors": "2階建て",
       "rooms": [
-        {"name": "LDK", "area": "18畳", "note": "南向き・吹き抜けなし"},
-        {"name": "主寝室", "area": "8畳", "note": "ウォークインクローゼット付き"},
-        {"name": "子供部屋", "area": "6畳×1", "note": "将来仕切り対応"},
-        {"name": "浴室・洗面", "area": "標準サイズ", "note": null},
-        {"name": "トイレ", "area": "2箇所", "note": "各階"},
-        {"name": "駐車場", "area": "1台", "note": "カーポート"}
+        {{"name": "LDK", "area": "18畳", "note": "南向き・吹き抜けなし"}},
+        {{"name": "主寝室", "area": "8畳", "note": "ウォークインクローゼット付き"}},
+        {{"name": "子供部屋", "area": "6畳×1", "note": "将来仕切り対応"}},
+        {{"name": "浴室・洗面", "area": "標準サイズ", "note": null}},
+        {{"name": "トイレ", "area": "2箇所", "note": "各階"}},
+        {{"name": "駐車場", "area": "1台", "note": "カーポート"}}
       ],
       "layout_description": "1階にLDK・浴室・洗面・トイレ・収納。2階に主寝室・子供部屋・トイレ。家事動線を重視したコンパクト設計。",
       "rationale": "予算3500万円以内で実現しやすい標準仕様。維持費も抑えられ、子育て世代に最適。",
       "estimated_cost": "2,400〜3,000万円（建物本体。坪単価65万円前後）"
-    }
+    }}
   ],
   "summary": "3案の比較サマリー文（200字程度）"
-}
+}}
 
 ## 面積の書き方（厳守）
 後段の法規チェック（建ぺい率・容積率）がこの数値を使って計算するため、以下を必ず守る。
@@ -324,8 +323,6 @@ def _build_floor_plan(llm_plan: _LLMFloorPlan, requirements: RequirementBaseline
     )
 
 
-def run_planning(requirements: RequirementBaseline, llm: ChatOllama) -> PlanningOutput:
-    """住宅要件書をもとに間取り3案を生成する（座標は決定論エンジンが付与）"""
 def run_planning(
     requirements: RequirementBaseline,
     llm: ChatOllama,
@@ -392,45 +389,3 @@ def run_planning(
             logger.exception("案「%s」の構築に失敗したためスキップします", p.concept)
 
     return PlanningOutput(plans=plans, summary=result.summary)
-    plans = []
-    corrections: list[str] = []
-    for p in data.get("plans", []):
-        rooms = [
-            Room(
-                name=r.get("name", ""),
-                area=r.get("area", ""),
-                note=r.get("note"),
-            )
-            for r in p.get("rooms", [])
-        ]
-
-        # LLM は坪の数値を㎡欄に書くことがある（例: 35坪 → "約35㎡"）。
-        # 後段の法規チェックが面積を数値として使うため、ここで決定論的に補正する。
-        concept = p.get("concept", "")
-        total_area, correction = normalize_total_floor_area(
-            p.get("total_floor_area", ""), [r.area for r in rooms]
-        )
-        if correction:
-            corrections.append(f"{concept}: {correction}")
-
-        plans.append(
-            FloorPlan(
-                concept=concept,
-                total_floor_area=total_area or "",
-                floors=p.get("floors", ""),
-                rooms=rooms,
-                layout_description=p.get("layout_description", ""),
-                rationale=p.get("rationale", ""),
-                estimated_cost=p.get("estimated_cost"),
-            )
-        )
-
-    summary = data.get("summary", "")
-    if corrections:
-        # 補正した事実は隠さず出力に残す（説明可能性の担保）
-        summary += "\n\n※ 面積表記の自動補正: " + " / ".join(corrections)
-
-    return PlanningOutput(
-        plans=plans,
-        summary=summary,
-    )
