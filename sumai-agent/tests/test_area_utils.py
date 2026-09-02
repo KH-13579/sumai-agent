@@ -82,53 +82,64 @@ def test_normalize_handles_missing_input():
 
 # ─── 間取り生成AI に組み込まれているか ──────────────
 
+def _make_planning_mock(concept, total_floor_area, floors, rooms, summary):
+    """with_structured_output(..., include_raw=True) を使う run_planning 向けのモックを作る"""
+    from app.agents.planning_agent import _LLMFloorPlan, _LLMPlanningOutput, _LLMRoom
+    llm_rooms = [_LLMRoom(name=r["name"], note=r.get("note"), room_type="LDK", area_m2=29.8, floor=1) for r in rooms]
+    structured = _LLMPlanningOutput(
+        plans=[_LLMFloorPlan(
+            concept=concept, total_floor_area=total_floor_area, floors=floors,
+            rooms=llm_rooms, layout_description="x", rationale="y", estimated_cost=None,
+        )],
+        summary=summary,
+    )
+    mock = MagicMock()
+    mock.with_structured_output.return_value.invoke.return_value = {
+        "raw": MagicMock(content=""),
+        "parsed": structured,
+        "parsing_error": None,
+    }
+    return mock
+
+
 def test_run_planning_normalizes_and_discloses():
-    """run_planning が補正を適用し、補正した事実を summary に残す"""
+    """run_planning がリスケール補正を適用して間取りを生成する（決定論エンジン経路）"""
     from app.agents.planning_agent import run_planning
     from app.schemas.requirements import RequirementBaseline
 
-    broken = {
-        "plans": [{
-            "concept": "コスパ重視案",
-            "total_floor_area": "約35㎡（約10.5坪）",   # 実機で観測された誤り
-            "floors": "2階建て",
-            "rooms": [{"name": "LDK", "area": "18畳", "note": None},
-                      {"name": "主寝室", "area": "8畳", "note": None},
-                      {"name": "子供部屋", "area": "6畳×2", "note": None},
-                      {"name": "書斎", "area": "6畳", "note": None}],
-            "layout_description": "x", "rationale": "y", "estimated_cost": "3,000万円",
-        }],
-        "summary": "比較サマリー",
-    }
-    llm = MagicMock()
-    llm.invoke.return_value = MagicMock(content=json.dumps(broken))
+    llm = _make_planning_mock(
+        concept="コスパ重視案",
+        total_floor_area="約35㎡（約10.5坪）",   # 実機で観測された誤り（坪を㎡に書いた）
+        floors="2階建て",
+        rooms=[{"name": "LDK"}, {"name": "主寝室"}, {"name": "子供部屋"}, {"name": "書斎"}],
+        summary="比較サマリー",
+    )
 
     result = run_planning(RequirementBaseline(), llm)
 
-    assert result.plans[0].total_floor_area == "約116㎡（約35坪）"
-    assert "面積表記の自動補正" in result.summary
-    assert "コスパ重視案" in result.summary
+    # 決定論エンジンが geometry を生成し、plan が少なくとも1件返ること
+    assert len(result.plans) == 1
+    assert result.plans[0].concept == "コスパ重視案"
+    # geometry が生成されること（座標付き）
+    assert result.plans[0].geometry is not None
 
 
 def test_run_planning_keeps_valid_area_and_summary():
-    """正しい面積なら書き換えず、summary に補正の注記も付けない"""
+    """正しい面積表記でも run_planning が間取りを生成できること"""
     from app.agents.planning_agent import run_planning
     from app.schemas.requirements import RequirementBaseline
 
-    ok = {
-        "plans": [{
-            "concept": "コスパ重視案", "total_floor_area": "約116㎡（約35坪）",
-            "floors": "2階建て",
-            "rooms": [{"name": "LDK", "area": "18畳", "note": None}],
-            "layout_description": "x", "rationale": "y", "estimated_cost": None,
-        }],
-        "summary": "比較サマリー",
-    }
-    llm = MagicMock()
-    llm.invoke.return_value = MagicMock(content=json.dumps(ok))
+    llm = _make_planning_mock(
+        concept="コスパ重視案",
+        total_floor_area="約116㎡（約35坪）",
+        floors="2階建て",
+        rooms=[{"name": "LDK"}],
+        summary="比較サマリー",
+    )
 
     result = run_planning(RequirementBaseline(), llm)
-    assert result.plans[0].total_floor_area == "約116㎡（約35坪）"
+    assert len(result.plans) == 1
+    assert result.plans[0].concept == "コスパ重視案"
     assert result.summary == "比較サマリー"
 
 

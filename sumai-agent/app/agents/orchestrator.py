@@ -7,7 +7,7 @@
                                └─→ [ POST_HEARING_STEPS ] → compose → END
 
 POST_HEARING_STEPS が専門エージェントの実行順を宣言する唯一の場所であり、
-見積AI・メーカー推薦AI（Phase 2）はここに1行追加するだけで組み込める。
+見積AI（Phase 2）はここに1行追加するだけで組み込める。
 """
 from __future__ import annotations
 
@@ -27,24 +27,8 @@ from app.agents.legal_agent import build_legal_reply, build_replan_constraints, 
 from app.agents.pipeline import AgentStep, add_pipeline_to_graph, first_enabled
 from app.agents.planning_agent import run_planning
 from app.agents.state import ReplySection, SumaiState, section
-from app.schemas.requirements import RequirementBaseline
 from app.tools.llm_cache import CachedChatModel, cache_mode
 from app.agents.maker_agent import run_maker_recommendation
-
-
-# ─────────────────────────────────────────
-# グラフ状態
-# ─────────────────────────────────────────
-
-class SumaiState(TypedDict):
-    messages: Annotated[List[BaseMessage], add_messages]
-    requirements: Optional[RequirementBaseline]
-    floor_plans: Optional[List[FloorPlan]]
-    maker_recommendations: Optional[List[MakerRecommendation]]
-    stage: str            # "hearing" | "planning" | "maker" | "follow_up"
-    reply: str
-    done: bool
-    hearing_turns: int
 
 
 # 間取り生成に必須の4項目（この4つが揃うまでヒアリングを続ける）
@@ -181,8 +165,6 @@ def _legal_autofix_enabled() -> bool:
 # LLM 初期化
 # ─────────────────────────────────────────
 
-def _get_llm(json_mode: bool = False) -> ChatOllama:
-    model = os.getenv("SUMAI_MODEL", "qwen2.5:3b")
 def _temperature() -> float:
     """生成のばらつきを抑える温度（NFR-01 デモ再現性）。不正値は既定値に戻す"""
     try:
@@ -191,7 +173,7 @@ def _temperature() -> float:
         return 0.3
 
 
-def _get_llm(json_mode: bool = False):
+def _get_llm(json_mode: bool = False, num_predict: int = 1024):
     """全ノード共通のLLM生成口
 
     ここが LLM 呼び出しの唯一の入口であるため、応答キャッシュ（NFR-06）の差し込みも
@@ -202,17 +184,8 @@ def _get_llm(json_mode: bool = False):
     kwargs = {
         "model": model,
         "base_url": base_url,
-        "num_predict": 4096,
-        "temperature": _temperature(),
-def _get_llm(json_mode: bool = False, num_predict: int = 1024) -> ChatOllama:
-    model = os.getenv("SUMAI_MODEL", "qwen2.5:7b")
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    temperature = float(os.getenv("SUMAI_TEMPERATURE", "0.3"))
-    kwargs = {
-        "model": model,
-        "base_url": base_url,
         "num_predict": num_predict,
-        "temperature": temperature,
+        "temperature": _temperature(),
     }
     if json_mode:
         # ヒアリング/間取り生成/敷地照会はJSON応答が前提のため、Ollama側にJSON整形を強制させる
@@ -243,7 +216,7 @@ def orchestrator_node(state: SumaiState) -> dict:
 
 def follow_up_node(state: SumaiState) -> dict:
     """間取り提示後のフォローアップ応答（ORC-3）"""
-    llm = _get_llm()
+    llm = _get_llm(num_predict=512)
     system = SystemMessage(content=(
         "あなたは住宅AIコンシェルジュです。"
         "すでに間取り案と法規チェック結果を提示した後のフォローアップ対話を行います。"
@@ -251,44 +224,13 @@ def follow_up_node(state: SumaiState) -> dict:
         "法規に関する質問には「参考判定であり、建築士・指定確認検査機関の確認が必要」と必ず添えてください。"
     ))
     resp = llm.invoke([system] + state["messages"])
-    """ルーティングとフォローアップ応答を担当"""
-    # メーカー推薦済み → フォローアップ
-    if state.get("maker_recommendations"):
-        llm = _get_llm(num_predict=512)
-        system = SystemMessage(content=(
-            "あなたは住宅AIコンシェルジュです。"
-            "間取り案とハウスメーカー推薦をすでに提案した後のフォローアップ対話を行います。"
-            "ユーザーの質問や感想に丁寧に答え、必要に応じてハウスメーカーへの相談・来場予約を提案してください。"
-            "「※本提案は概算・参考プランです。詳細は建築士・ハウスメーカーにご確認ください。」"
-            "を文末に添えてください。"
-        ))
-        messages = [system] + state["messages"]
-        resp = llm.invoke(messages)
-        return {
-            "reply": resp.content,
-            "stage": "follow_up",
-            "done": True,
-        }
-
-    # 間取り生成済み・メーカー未推薦 → メーカー推薦フェーズへ
-    if state.get("floor_plans"):
-        return {
-            "stage": "maker",
-            "reply": "",
-            "done": False,
-        }
-
-    # 未生成 → ヒアリングフェーズへ委譲
     return {
-        "stage": "follow_up",
         "reply_sections": section("follow_up", "フォローアップ", str(resp.content)),
     }
 
 
 def hearing_node(state: SumaiState) -> dict:
     """ヒアリングAIを実行して要件を構造化（HEAR-1〜4）"""
-    llm = _get_llm(json_mode=True)
-    """ヒアリングAIを実行して要件を構造化"""
     llm = _get_llm(json_mode=True, num_predict=512)
     prev_req = state.get("requirements")
     turns = state.get("hearing_turns", 0) + 1
@@ -332,23 +274,18 @@ def hearing_node(state: SumaiState) -> dict:
 
 
 def planning_node(state: SumaiState) -> dict:
-    """間取り生成AIを実行して3案を生成"""
-    # with_structured_output(method="json_schema")がJSON強制を担うため、
-    # ここでformat="json"を重ねて指定しない（衝突回避）
-    llm = _get_llm(json_mode=False)
     """間取り生成AIを実行して3案を生成（PLAN-1〜3）
 
     法規チェックからの修正指示（legal_constraints）が入っている場合は、
     それを制約として渡して再生成する（自律修正ループの2周目）。
     """
-    llm = _get_llm(json_mode=True)
+    # with_structured_output(method="json_schema")がJSON強制を担うため、
+    # ここでformat="json"を重ねて指定しない（衝突回避）
+    llm = _get_llm(json_mode=False, num_predict=2048)
     constraints = state.get("legal_constraints")
     retry = state.get("legal_retry", 0)
 
     result = run_planning(state["requirements"], llm, legal_constraints=constraints)
-    """間取り生成AIを実行して3案を生成"""
-    llm = _get_llm(json_mode=True, num_predict=2048)
-    result = run_planning(state["requirements"], llm)
 
     plans_text = ""
     for i, plan in enumerate(result.plans, 1):
@@ -376,53 +313,6 @@ def planning_node(state: SumaiState) -> dict:
     return {
         "floor_plans": result.plans,
         "stage": "planning",
-続けて、あなたの要件に最適な**ハウスメーカー・サービス**をAIが分析します。少々お待ちください…"""
-
-    return {
-        "floor_plans": result.plans,
-        "stage": "maker",
-        "reply": reply,
-        "done": False,
-    }
-
-
-def maker_node(state: SumaiState) -> dict:
-    """メーカー推薦AIを実行してハウスメーカーを推薦する"""
-    llm = _get_llm(json_mode=True, num_predict=1024)
-    result = run_maker_recommendation(
-        state["requirements"],
-        state.get("floor_plans") or [],
-        llm,
-    )
-
-    # 自然言語応答の生成
-    rec_text = ""
-    for rec in result.recommendations:
-        type_label = "注文住宅メーカー" if rec.type == "builder" else "情報ポータル"
-        rec_text += f"\n\n### 第{rec.rank}位：{rec.name}（{type_label}）\n"
-        rec_text += f"**推薦理由：** {rec.reason}\n"
-        strengths_text = "、".join(rec.strengths[:3])
-        rec_text += f"- 強み：{strengths_text}\n"
-        rec_text += f"- 価格帯：{rec.price_band}\n"
-        if rec.caution:
-            rec_text += f"- ⚠️ 注意点：{rec.caution}\n"
-        rec_text += f"- 🔗 [{rec.name} 公式サイト]({rec.website})\n"
-
-    reply = f"""ご要件の間取り案に合わせて、**おすすめのハウスメーカー・サービス**をご提案します！
-{rec_text}
-
----
-{result.summary}
-
-> ⚠️ 本推薦はAIによる参考情報です。実際の費用・仕様・対応エリアは各社にご確認ください。
-
-気になるメーカーへの来場予約・カタログ請求などもお手伝いできます。お気軽にお申し付けください！"""
-
-    return {
-        "maker_recommendations": result.recommendations,
-        "stage": "follow_up",
-        "reply": reply,
-        "done": True,
         # 制約を消費したらクリアする（再生成の連鎖を防ぐ）
         "legal_constraints": None,
         "legal_retry": retry + 1 if constraints else retry,
@@ -456,6 +346,42 @@ def legal_node(state: SumaiState) -> dict:
             "法規チェック結果",
             build_legal_reply(output, include_disclaimer=False),
         ),
+    }
+
+
+def maker_node(state: SumaiState) -> dict:
+    """メーカー推薦AIを実行してハウスメーカーを推薦する（MKR-1〜6）"""
+    llm = _get_llm(json_mode=True, num_predict=1024)
+    result = run_maker_recommendation(
+        state["requirements"],
+        state.get("floor_plans") or [],
+        llm,
+    )
+
+    rec_text = ""
+    for rec in result.recommendations:
+        type_label = "注文住宅メーカー" if rec.type == "builder" else "情報ポータル"
+        rec_text += f"\n\n### 第{rec.rank}位：{rec.name}（{type_label}）\n"
+        rec_text += f"**推薦理由：** {rec.reason}\n"
+        strengths_text = "、".join(rec.strengths[:3])
+        rec_text += f"- 強み：{strengths_text}\n"
+        rec_text += f"- 価格帯：{rec.price_band}\n"
+        if rec.caution:
+            rec_text += f"- ⚠️ 注意点：{rec.caution}\n"
+        rec_text += f"- 🔗 [{rec.name} 公式サイト]({rec.website})\n"
+
+    markdown = f"""### 🏠 おすすめハウスメーカー・サービス
+{rec_text}
+
+---
+{result.summary}
+
+> ⚠️ 本推薦はAIによる参考情報です。実際の費用・仕様・対応エリアは各社にご確認ください。"""
+
+    return {
+        "maker_recommendation": result.recommendations,
+        "stage": "maker",
+        "reply_sections": section("maker", "メーカー推薦", markdown),
     }
 
 
@@ -509,9 +435,9 @@ def _legal_autofix_route(state: SumaiState) -> Optional[str]:
 POST_HEARING_STEPS: List[AgentStep] = [
     AgentStep("planning", "planning", planning_node),
     AgentStep("legal", "legal", legal_node, route_override=_legal_autofix_route),
-    # ── Phase 2 の追加予定（要件定義書 §7.4 / §7.5）──
+    AgentStep("maker", "maker", maker_node),
+    # ── Phase 2 の追加予定（要件定義書 §7.4）──
     # AgentStep("estimate", "estimate", estimate_node),   # 見積AI（EST-1〜4）
-    # AgentStep("maker", "maker", maker_node),            # メーカー推薦AI（MKR-1〜6）
 ]
 
 COMPOSE_NODE = "compose"
@@ -525,10 +451,6 @@ FOLLOW_UP_NODE = "follow_up"
 def route_from_orchestrator(state: SumaiState) -> str:
     if state.get("floor_plans"):
         return FOLLOW_UP_NODE
-    if state.get("maker_recommendations"):
-        return END
-    if state.get("floor_plans"):
-        return "maker"
     return "hearing"
 
 
@@ -554,8 +476,6 @@ def build_graph() -> tuple:
 
     # 専門エージェント群のノードとエッジは宣言から自動生成する
     add_pipeline_to_graph(builder, POST_HEARING_STEPS, terminal=COMPOSE_NODE)
-    builder.add_node("planning", planning_node)
-    builder.add_node("maker", maker_node)
 
     builder.set_entry_point("orchestrator")
     builder.add_conditional_edges(
@@ -570,11 +490,6 @@ def build_graph() -> tuple:
     )
     builder.add_edge(FOLLOW_UP_NODE, COMPOSE_NODE)
     builder.add_edge(COMPOSE_NODE, END)
-        {END: END, "hearing": "hearing", "maker": "maker"},
-    )
-    builder.add_conditional_edges("hearing", route_from_hearing, {"planning": "planning", END: END})
-    builder.add_edge("planning", "maker")
-    builder.add_edge("maker", END)
 
     graph = builder.compile(checkpointer=memory)
     return graph, memory

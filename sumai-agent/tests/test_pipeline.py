@@ -57,20 +57,21 @@ def test_route_override_wins_over_next_step():
     assert steps[1].route_override({}) is None
 
 
-def test_declared_pipeline_contains_planning_then_legal():
-    """本番のステップ宣言が「間取り生成 → 法規チェック」の順であること"""
+def test_declared_pipeline_contains_planning_then_legal_then_maker():
+    """本番のステップ宣言が「間取り生成 → 法規チェック → メーカー推薦」の順であること"""
     names = [s.name for s in orch.POST_HEARING_STEPS]
-    assert names == ["planning", "legal"]
+    assert names == ["planning", "legal", "maker"]
     assert first_enabled(orch.POST_HEARING_STEPS, {}, orch.COMPOSE_NODE) == "planning"
     assert resolve_next(orch.POST_HEARING_STEPS, 0, {}, orch.COMPOSE_NODE) == "legal"
-    assert resolve_next(orch.POST_HEARING_STEPS, 1, {}, orch.COMPOSE_NODE) == orch.COMPOSE_NODE
+    assert resolve_next(orch.POST_HEARING_STEPS, 1, {}, orch.COMPOSE_NODE) == "maker"
+    assert resolve_next(orch.POST_HEARING_STEPS, 2, {}, orch.COMPOSE_NODE) == orch.COMPOSE_NODE
 
 
 def test_graph_builds_with_all_nodes():
     """グラフがコンパイルでき、法規チェックノードが含まれること"""
     graph, memory = orch.build_graph()
     nodes = set(graph.get_graph().nodes)
-    for expected in ("orchestrator", "hearing", "planning", "legal", "compose", "follow_up"):
+    for expected in ("orchestrator", "hearing", "planning", "legal", "maker", "compose", "follow_up"):
         assert expected in nodes, f"{expected} ノードが無い"
 
 
@@ -156,18 +157,22 @@ def test_legal_autofix_env_flag(monkeypatch, value, expected):
 def test_planning_node_increments_retry_only_when_revising():
     """再生成回数は制約付きで走ったときだけ増える（NFR-07 の上限判定用）"""
     from unittest.mock import MagicMock, patch
-    import json
+    from app.agents.planning_agent import _LLMFloorPlan, _LLMPlanningOutput
 
-    plans = {"plans": [{"concept": "案", "total_floor_area": "約100㎡", "floors": "2階建て",
-                        "rooms": [], "layout_description": "x", "rationale": "y",
-                        "estimated_cost": None}], "summary": "s"}
+    structured = _LLMPlanningOutput(
+        plans=[_LLMFloorPlan(concept="案", total_floor_area="約100㎡（約30坪）", floors="2階建て",
+                             rooms=[], layout_description="x", rationale="y", estimated_cost=None)],
+        summary="s",
+    )
     llm = MagicMock()
-    llm.invoke.return_value = MagicMock(content=json.dumps(plans))
+    llm.with_structured_output.return_value.invoke.return_value = {
+        "raw": MagicMock(content=""), "parsed": structured, "parsing_error": None,
+    }
 
     from app.schemas.requirements import RequirementBaseline
     base = {"requirements": RequirementBaseline(), "legal_retry": 0}
 
-    with patch.object(orch, "_get_llm", lambda json_mode=False: llm):
+    with patch.object(orch, "_get_llm", lambda json_mode=False, num_predict=1024: llm):
         assert orch.planning_node(dict(base))["legal_retry"] == 0
         revised = orch.planning_node(dict(base, legal_constraints="制約あり"))
         assert revised["legal_retry"] == 1
@@ -221,7 +226,7 @@ def test_no_preference_proceeds_to_planning():
         "requirements": known,
         "hearing_turns": 1,
     }
-    with patch.object(orch, "_get_llm", lambda json_mode=False: llm):
+    with patch.object(orch, "_get_llm", lambda json_mode=False, num_predict=1024: llm):
         result = orch.hearing_node(state)
 
     assert result["stage"] == "planning", "聞き直しに戻っている"
@@ -245,7 +250,7 @@ def test_no_preference_ignored_when_nothing_known_yet():
         "follow_up_question": "ご家族の構成を教えてください。",
     }))
     state = {"messages": [HumanMessage(content="特にないです")], "hearing_turns": 1}
-    with patch.object(orch, "_get_llm", lambda json_mode=False: llm):
+    with patch.object(orch, "_get_llm", lambda json_mode=False, num_predict=1024: llm):
         result = orch.hearing_node(state)
 
     assert result["stage"] == "hearing"

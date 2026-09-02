@@ -14,6 +14,7 @@ from langgraph.graph.message import add_messages
 
 from app.schemas.floorplan import FloorPlan
 from app.schemas.legal import PlanLegalCheck, SiteInfo
+from app.schemas.maker import MakerRecommendation
 from app.schemas.requirements import RequirementBaseline
 
 
@@ -58,7 +59,7 @@ class SumaiState(TypedDict, total=False):
     site_info: Optional[SiteInfo]                        # 法規チェックAI（敷地照会）
     legal_checks: Optional[List[PlanLegalCheck]]         # 法規チェックAI（判定結果）
     estimate: Optional[dict[str, Any]]                   # Phase 2: 見積AI
-    maker_recommendation: Optional[dict[str, Any]]       # Phase 2: メーカー推薦AI
+    maker_recommendation: Optional[List[MakerRecommendation]]  # メーカー推薦AI
 
     # ── 応答の組み立て ──
     stage: str                                           # 現在のフェーズ（ChatResponse.stage）
