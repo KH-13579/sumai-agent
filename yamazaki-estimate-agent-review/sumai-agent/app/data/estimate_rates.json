@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "source": {
+    "name": "住宅金融支援機構 フラット35利用者調査（注文住宅）を基準にしたデモ用静的テーブル",
+    "url": "https://www.jhf.go.jp/about/research/loan/flat35/index.html",
+    "fiscal_year": 2024,
+    "scope": "建設費の概算。土地取得費、設計・申請、地盤改良、外構、登記、税、融資費用等は別途"
+  },
+  "base_yen_per_tsubo": 1100000,
+  "uncertainty_rate": 0.1,
+  "structure_factors": {
+    "wood": 1.0,
+    "steel": 1.4,
+    "rc": 1.8
+  },
+  "floor_factors": {
+    "1": 1.03,
+    "2": 1.0,
+    "3": 1.05
+  },
+  "grade_factors": {
+    "economy": 0.9,
+    "standard": 1.0,
+    "premium": 1.2
+  },
+  "equipment": {
+    "solar_4kw": {"label": "太陽光発電 4kW", "fixed_yen": 1150000},
+    "central_air": {"label": "全館空調", "fixed_yen": 2000000},
+    "zeh_insulation": {"label": "ZEH級断熱", "yen_per_tsubo": 150000}
+  }
+}
