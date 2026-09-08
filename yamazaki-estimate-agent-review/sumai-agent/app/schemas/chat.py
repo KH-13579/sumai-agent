@@ -1,0 +1,20 @@
+"""スマイエージェント — チャット API スキーマ"""
+from __future__ import annotations
+from typing import Optional, List, Literal
+from pydantic import BaseModel, Field
+
+from app.schemas.requirements import RequirementBaseline
+from app.schemas.floorplan import FloorPlan
+
+
+class ChatRequest(BaseModel):
+    session_id: str = Field(description="セッションID")
+    message: str = Field(description="ユーザーのメッセージ")
+
+
+class ChatResponse(BaseModel):
+    reply: str = Field(description="自然言語の応答（ユーザー向け）")
+    requirements: Optional[RequirementBaseline] = Field(None, description="現在の住宅要件書")
+    floor_plans: Optional[List[FloorPlan]] = Field(None, description="生成した間取り案")
+    stage: Literal["hearing", "planning", "follow_up"] = Field(description="現在のフェーズ")
+    done: bool = Field(False, description="間取り提示まで完了したか")
