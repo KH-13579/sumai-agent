@@ -1,5 +1,15 @@
-<title>法規チェックAI</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="スマイエージェント 法規チェックAI ガイド — 環境構築・起動・デモ実行から、建ぺい率／容積率／高さの判定内容、応答キャッシュ、エージェントの追加手順までの通し解説。">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<title>法規チェックAI ガイド — スマイエージェント</title>
+<!-- Web フォントは読み込まない。本ガイド自身が NFR-06（会場のネットワーク断でもデモを完走できること）を
+     強調している以上、ガイドを開く環境がオフラインでも同じ体裁で読めるようにする。
+     端末に Noto があればそれを使い、無ければ OS 標準の明朝／ゴシックへフォールバックする。 -->
 <style>
   /* ── トークン：ライトを完全定義し、ダークはトークンのみ上書き ───── */
   :root {
@@ -22,9 +32,11 @@
     --term-dim:     #7E9C95;
     --term-accent:  #A6C97E;
 
-    --font-display: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
-    --font-body:    "Noto Sans JP", -apple-system, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
-    --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+    --font-display: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif;
+    /* frontend/index.html の --font-body と同一。片方を変えたらもう片方も合わせること */
+    --font-body:    "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+                    "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
 
     --fs-h1:   clamp(1.85rem, 4vw, 2.55rem);
     --fs-h2:   clamp(1.25rem, 2.3vw, 1.55rem);
@@ -282,10 +294,42 @@
 
   footer { margin-top: 4rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); font-size: var(--fs-xs); color: var(--ink-3); font-family: var(--font-mono); letter-spacing: 0.04em; }
 
+  /* ── 目次へ戻る（長文なので常時表示の導線を置く） ───────── */
+  .totop {
+    position: fixed; right: 1rem; bottom: 1rem; z-index: 50;
+    background: var(--surface); border: 1px solid var(--rule-strong);
+    color: var(--ink-2); text-decoration: none;
+    font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.06em;
+    padding: 0.55rem 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+  }
+  .totop:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── 印刷（手順書は印刷して手元に置かれることが多い） ───── */
+  @media print {
+    :root {
+      --paper: #fff; --surface: #fff; --surface-2: #fff;
+      --ink: #000; --ink-2: #222; --ink-3: #444;
+      --rule: #bbb; --rule-strong: #888;
+      /* 暗色背景のターミナル／用語ブロックは反転させる（インクの浪費と判読性の対策） */
+      --term-bg: #fff; --term-ink: #000; --term-dim: #555; --term-accent: #000;
+    }
+    body { background: #fff; font-size: 10.5pt; line-height: 1.65; }
+    .wrap { max-width: none; padding: 0; }
+    .totop { display: none; }
+    h2, h3, h4 { break-after: avoid; }
+    figure, .note, .layer, .tablewrap, ol.steps > li { break-inside: avoid; }
+    figure.term, figure.diagram { border: 1px solid #888; }
+    a { color: #000; }
+    a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 8pt; color: #444; word-break: break-all; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
 </style>
+</head>
+
+<body>
 
 <div class="wrap">
 
@@ -302,7 +346,7 @@
   </dl>
 </header>
 
-<nav class="toc">
+<nav class="toc" id="toc" aria-label="目次">
   <h2>目次</h2>
   <ol>
     <li><span class="num">01</span><a href="#status">前提と全体像</a></li>
@@ -326,7 +370,7 @@
 
   <p>初めて動かす場合は <a href="#setup">02 章</a>から順に進めてください。すでに構築済みなら <a href="#launch">03 章（起動手順）</a>だけで足ります。<strong>人前でデモを行う場合は <a href="#replay">05 章（応答キャッシュ）</a>を必ず読んでください。</strong></p>
 
-  <h3>必要なもの</h3>
+  <h3 id="status-1">必要なもの</h3>
   <div class="tablewrap">
     <table>
       <thead><tr><th>項目</th><th>要件</th><th>備考</th></tr></thead>
@@ -345,7 +389,7 @@
     <p>Ollama が GPU を使えるのは <strong>NVIDIA（CUDA）と AMD（ROCm）のみ</strong>です。それ以外の環境では CPU 推論になり、<strong>間取り生成 1 回に十数分〜数十分</strong>かかります。実演にこの待ち時間は成立しないため、<a href="#replay">05 章の応答キャッシュ</a>で事前に応答を保存しておいてください。要件定義書 NFR-06 が要求している仕組みです。</p>
   </div>
 
-  <h3>この文書の構成</h3>
+  <h3 id="status-2">この文書の構成</h3>
   <div class="layers">
     <div class="layer">
       <span class="tier">使う</span>
@@ -378,7 +422,7 @@
 
   <ol class="steps">
     <li>
-      <h3>仮想環境を作る</h3>
+      <h3 id="setup-1">仮想環境を作る</h3>
       <figure class="term">
         <figcaption>Windows</figcaption>
 <pre><code><span class="p">cd</span> sumai-agent
@@ -392,7 +436,7 @@ python3 -m venv venv</code></pre>
     </li>
 
     <li>
-      <h3>依存ライブラリを入れる</h3>
+      <h3 id="setup-2">依存ライブラリを入れる</h3>
       <figure class="term">
         <figcaption>ターミナル</figcaption>
 <pre><code>PY -m pip install --upgrade pip
@@ -402,7 +446,7 @@ PY -m pip install -r requirements.txt pytest</code></pre>
     </li>
 
     <li>
-      <h3><code>.env</code> を作る</h3>
+      <h3 id="setup-3"><code>.env</code> を作る</h3>
       <figure class="term">
         <figcaption>Windows</figcaption>
 <pre><code>copy .env.example .env</code></pre>
@@ -426,7 +470,7 @@ PY -m pip install -r requirements.txt pytest</code></pre>
     </li>
 
     <li>
-      <h3>Ollama を入れてモデルを取得する</h3>
+      <h3 id="setup-4">Ollama を入れてモデルを取得する</h3>
       <p><a href="https://ollama.com/">ollama.com</a> からインストールしてください。Windows / macOS はインストーラを実行すれば常駐します。Linux は次のコマンドです。</p>
       <figure class="term">
         <figcaption>Linux</figcaption>
@@ -444,7 +488,7 @@ curl http://localhost:11434/api/version</code></pre>
     </li>
 
     <li>
-      <h3>テストで疎通を確認する</h3>
+      <h3 id="setup-5">テストで疎通を確認する</h3>
       <p>テストは LLM をすべてモックしているため <strong>Ollama 不要・数秒で完了</strong>します。ここが通れば構築は成功です。</p>
       <figure class="term">
         <figcaption>ターミナル</figcaption>
@@ -460,7 +504,7 @@ curl http://localhost:11434/api/version</code></pre>
 
   <ol class="steps">
     <li>
-      <h3>Ollama が動いていることを確認する</h3>
+      <h3 id="launch-1">Ollama が動いていることを確認する</h3>
       <figure class="term">
         <figcaption>ターミナル</figcaption>
 <pre><code>curl http://localhost:11434/api/version</code></pre>
@@ -469,7 +513,7 @@ curl http://localhost:11434/api/version</code></pre>
     </li>
 
     <li>
-      <h3>モデルをメモリに載せておく</h3>
+      <h3 id="launch-2">モデルをメモリに載せておく</h3>
       <p>Ollama は <strong>5 分間呼ばれないとモデルをメモリから降ろします</strong>。デモ中に解説で間が空くと再ロードが走るため（14b では約 100 秒。3b なら数秒で済みます）、事前に温めて <code>keep_alive</code> を延ばしておきます。</p>
       <figure class="term">
         <figcaption>ターミナル</figcaption>
@@ -483,7 +527,7 @@ curl -s http://localhost:11434/api/ps</code></pre>
     </li>
 
     <li>
-      <h3>アプリを起動する</h3>
+      <h3 id="launch-3">アプリを起動する</h3>
       <figure class="term">
         <figcaption>ターミナル</figcaption>
 <pre><code>PY run.py</code></pre>
@@ -492,7 +536,7 @@ curl -s http://localhost:11434/api/ps</code></pre>
     </li>
 
     <li>
-      <h3>ブラウザで開く</h3>
+      <h3 id="launch-4">ブラウザで開く</h3>
       <figure class="term">
         <figcaption>ブラウザ</figcaption>
 <pre><code>http://localhost:8000</code></pre>
@@ -501,7 +545,7 @@ curl -s http://localhost:11434/api/ps</code></pre>
     </li>
   </ol>
 
-  <h3>停止する</h3>
+  <h3 id="launch-5">停止する</h3>
   <p>アプリを起動したターミナルで <strong>Ctrl+C</strong> です。</p>
 
   <div class="note warn">
@@ -527,17 +571,18 @@ curl -s http://localhost:11434/api/ps</code></pre>
     </table>
   </div>
 
-  <h3>順に表示されるもの</h3>
+  <h3 id="demo-1">順に表示されるもの</h3>
   <ol>
     <li><strong>ヒアリングAI の追質問</strong> — 家族構成・予算・土地情報・希望の広さの4項目が揃うまで間取りは生成されません</li>
     <li><strong>間取り3案</strong> — コスパ重視／広さ重視／収納重視</li>
     <li><strong>法規チェック結果</strong> — 敷地条件の表、案ごとの判定表、要確認フラグ、免責</li>
-    <li><strong>送客 CTA とアーティファクトのリンク</strong> — 右パネルに「成果物」カードが出ます</li>
+    <li><strong>メーカー推薦</strong> — 要件・間取りに合うハウスメーカー／ポータルを最大3件、推薦理由つきで提示</li>
+    <li><strong>送客 CTA とアーティファクトのリンク</strong> — チャット内に送客バナー、右パネル（狭い画面ではチャットの下）に「成果物」カードが出ます</li>
   </ol>
 
-  <p>右パネルのフロー表示は ① ヒアリング → ④ 送客 まで進みます。このうち ③ 法規チェックが今回追加された段です。</p>
+  <p>フロー表示は <strong>① ヒアリング → ② 間取り生成 → ③ 法規チェック → ④ メーカー推薦 → ⑤ 送客</strong> と進みます。このうち ③ 法規チェックが今回追加された段です。</p>
 
-  <h3>機械可読アーティファクト</h3>
+  <h3 id="demo-2">機械可読アーティファクト</h3>
   <p>要件定義書 §16「機械可読アーティファクト」に対応する統合 JSON です。下流エージェント（見積AI・メーカー推薦AI）はこれを読むだけで接続できます。</p>
   <figure class="term">
     <figcaption>ターミナル</figcaption>
@@ -557,7 +602,7 @@ curl -s http://localhost:11434/api/ps</code></pre>
     <p>軽量モデルへの切り替えやメモリの増設は待ち時間を<strong>短く</strong>するだけで、CPU 推論である限り数分〜数十分は残ります。待ち時間を <strong>0 にできるのはキャッシュのみ</strong>です。ネットワーク断や Ollama の停止でもデモが完走するという利点も、キャッシュにしかありません。さらに 7b への変更は<strong>間取りが 1 案に減る</strong>という別の問題を生みます（<a href="#issues">10 章</a>）。</p>
   </div>
 
-  <h3>4 つのモード</h3>
+  <h3 id="replay-1">4 つのモード</h3>
   <p><code>.env</code> の <code>SUMAI_LLM_CACHE</code> で切り替えます。</p>
 
   <div class="tablewrap">
@@ -574,10 +619,10 @@ curl -s http://localhost:11434/api/ps</code></pre>
 
   <p><code>auto</code> が実用上の中心です。キャッシュが外れても実機にフォールバックするだけなので、<strong>デモが止まることがありません</strong>。逆に <code>replay</code> はキャッシュが 1 つでも欠けていればその場で失敗するため、事前確認に向いています。</p>
 
-  <h3>手順</h3>
+  <h3 id="replay-2">手順</h3>
   <ol class="steps">
     <li>
-      <h3>デモシナリオのキャッシュを作る</h3>
+      <h3 id="replay-3">デモシナリオのキャッシュを作る</h3>
       <p>初回だけ実機を走らせます。数十分かかるので裏で流しておいてください。ブラウザに張り付く必要はありません。</p>
       <figure class="term">
         <figcaption>ターミナル</figcaption>
@@ -587,7 +632,7 @@ curl -s http://localhost:11434/api/ps</code></pre>
     </li>
 
     <li>
-      <h3>キャッシュだけで完走するか検証する</h3>
+      <h3 id="replay-4">キャッシュだけで完走するか検証する</h3>
       <p><code>--verify</code> は <code>SUMAI_LLM_CACHE=replay</code> で走ります。<strong>Ollama を止めてから実行</strong>すれば、オフラインでデモが成立することを確実に確認できます。</p>
       <figure class="term">
         <figcaption>ターミナル</figcaption>
@@ -597,7 +642,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
     </li>
 
     <li>
-      <h3>本番は auto で起動する</h3>
+      <h3 id="replay-5">本番は auto で起動する</h3>
       <p><code>.env</code> を <code>SUMAI_LLM_CACHE=auto</code> に書き換えてアプリを起動すると、キャッシュ済みのシナリオは即座に応答が返ります。</p>
       <figure class="term">
         <figcaption>.env</figcaption>
@@ -606,7 +651,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
     </li>
   </ol>
 
-  <h3>キャッシュが命中する条件</h3>
+  <h3 id="replay-6">キャッシュが命中する条件</h3>
   <p>キャッシュキーは <strong>モデル名 ＋ JSON モード ＋ 全会話履歴</strong>のハッシュです。この 3 つが作成時と一致したときだけキャッシュが使われます。</p>
 
   <div class="tablewrap">
@@ -636,7 +681,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
   <p>LangGraph のグラフ形状は次のとおりです。破線の逆流は法規NG 時の自律修正ループ（既定は無効）です。</p>
 
   <figure class="diagram">
-<pre>  <b>orchestrator</b> ──┬─(間取り生成済み)──→ <b>follow_up</b> ───────────→ <b>compose</b> ──→ END
+<pre aria-hidden="true">  <b>orchestrator</b> ──┬─(間取り生成済み)──→ <b>follow_up</b> ───────────→ <b>compose</b> ──→ END
                  │
                  └─→ <b>hearing</b> ──┬─(要件不足・追質問)──────────→ <b>compose</b> ──→ END
                                 │
@@ -644,10 +689,13 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
                                        ▲            │
                                        └╌╌╌╌╌╌╌╌╌╌╌┘
                                      <i>SUMAI_LEGAL_AUTOFIX=1 かつ NG のとき、最大1回</i></pre>
-    <figcaption>app/agents/orchestrator.py</figcaption>
+    <figcaption>app/agents/orchestrator.py — 処理の流れ：orchestrator は、間取りが生成済みなら follow_up へ、
+      未生成なら hearing へ分岐します。hearing で要件が不足していればそのまま compose（追質問のみ）で終了し、
+      要件が揃えば planning → legal → compose と進みます。SUMAI_LEGAL_AUTOFIX=1 かつ法規NGのときだけ、
+      legal から planning へ最大1回だけ差し戻します。</figcaption>
   </figure>
 
-  <h3>3つの接続点</h3>
+  <h3 id="arch-1">3つの接続点</h3>
 
   <div class="layers">
     <div class="layer">
@@ -667,7 +715,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
     </div>
   </div>
 
-  <h3>ファイル一覧</h3>
+  <h3 id="arch-2">ファイル一覧</h3>
   <div class="tablewrap">
     <table>
       <thead><tr><th>ファイル</th><th>責務</th></tr></thead>
@@ -693,7 +741,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
   <p>中核となる設計は<strong>判定を純粋な算術で行い、LLM を介在させない</strong>ことです。LLM の役割は <code>land_info</code> の自由文から敷地面積・用途地域・道路幅員を抽出する1点のみです。これにより同じ入力に対して常に同じ判定文が返り、LLM の揺れでキャッシュ作成時に破綻することがありません（NFR-01）。</p>
 
   <figure class="diagram">
-<pre>  <b>[LLM]</b>    land_info 自由文  ──→  SiteInfo（敷地面積 / 用途地域 / 道路幅員）
+<pre aria-hidden="true">  <b>[LLM]</b>    land_info 自由文  ──→  SiteInfo（敷地面積 / 用途地域 / 道路幅員）
                                         │
   <b>[Python]</b>  建ぺい率 = 建築面積 ÷ 敷地面積        ≤ 指定建ぺい率      ──→ ok / ng
             容積率  = 延床面積 ÷ 敷地面積        ≤ <i>min(指定, 幅員×係数)</i> ──→ ok / ng
@@ -703,10 +751,14 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
                                         │
                                         ▼
             判定文もテンプレ生成 <i>= 毎回同一出力</i></pre>
-    <figcaption>app/tools/legal_rules.py</figcaption>
+    <figcaption>app/tools/legal_rules.py — 処理の流れ：LLM が担うのは land_info の自由文から
+      SiteInfo（敷地面積・用途地域・道路幅員）を抽出するところまでです。以降は Python の算術で、
+      建ぺい率＝建築面積÷敷地面積、容積率＝延床面積÷敷地面積（上限は指定容積率と前面道路幅員×法定係数の小さい方）、
+      高さ＝階数×3＋2m をそれぞれの上限と比較して ok / ng を決めます。続いて要確認フラグ（斜線・日影・防火・条例など）を
+      定型生成し、判定文もテンプレートで組み立てるため、同じ入力に対する出力は毎回同一になります。</figcaption>
   </figure>
 
-  <h3>自動判定（LAW-2）</h3>
+  <h3 id="legal-1">自動判定（LAW-2）</h3>
   <div class="tablewrap">
     <table>
       <thead><tr><th>項目</th><th>判定式</th><th>根拠</th></tr></thead>
@@ -721,7 +773,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
 
   <p>容積率が要点です。幅員 12m 未満の場合、<strong>基準容積率が指定容積率より厳しくなるのが通例</strong>なので、両者の小さい方を採用します。法定係数は住居系が 4/10、その他が 6/10 です。角地・防火地域の緩和は<strong>一律見込みません</strong>（安全側の判定）。</p>
 
-  <h3>要確認フラグ（LAW-3）</h3>
+  <h3 id="legal-2">要確認フラグ（LAW-3）</h3>
   <p>自動計算できない項目は無理に計算せず、明確に切り分けて専門家確認に回します。すべて定型生成で、用途地域と敷地条件に応じて増減します。</p>
   <div class="tablewrap">
     <table>
@@ -740,14 +792,14 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
     </table>
   </div>
 
-  <h3>状態は2つではなく3つ</h3>
+  <h3 id="legal-3">状態は2つではなく3つ</h3>
   <div class="layers">
     <div class="layer"><span class="tier">ok</span><strong>適合</strong><p>数値が上限内に収まっています。</p></div>
     <div class="layer"><span class="tier">ng</span><strong>不適合の可能性</strong><p>数値が上限を超過しています。</p></div>
     <div class="layer"><span class="tier">?</span><strong>判定材料不足・データ矛盾</strong><p>敷地面積や延床面積が読み取れない場合、<strong>または間取りデータが自己矛盾している場合</strong>です。この状態では決して「適合」を出しません。詳細は <a href="#issues">10 章</a>の坪／㎡ 問題を参照してください。</p></div>
   </div>
 
-  <h3>敷地情報の取得元（LAW-1）</h3>
+  <h3 id="legal-4">敷地情報の取得元（LAW-1）</h3>
   <p>4段階のフォールバックです。どの段を使ったかは出力（<code>site_info.source</code>）に明示され、何を仮定したかもすべて <code>assumptions</code> に記録されます。</p>
   <div class="tablewrap">
     <table>
@@ -766,7 +818,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
     <p>API キー未設定、API 障害、タイムアウトのいずれの場合も、例外を投げずに静かに次の段へフォールバックします。これは NFR-06 の要求（会場のネットワーク断でもデモを完走できること）に対応するものです。</p>
   </div>
 
-  <h3>自律修正ループ（既定は無効）</h3>
+  <h3 id="legal-5">自律修正ループ（既定は無効）</h3>
   <p><code>SUMAI_LEGAL_AUTOFIX=1</code> のとき、法規NG が出ると上限値を制約として間取り生成AI へ差し戻し、再生成して再判定します。無限ループ防止のため最大1回で打ち切ります（NFR-07）。実機で確認済みの挙動：planning は2回呼ばれ、敷地照会は1回のみ（再利用）、応答に重複表示はありません。</p>
   <p>既定を無効にしているのは、間取り生成が2回走るため所要時間が倍になるからです。デモの見せ場として使うときに有効化してください。</p>
 </section>
@@ -779,19 +831,19 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
 
   <ol class="steps">
     <li>
-      <h3>出力スキーマを定義する</h3>
+      <h3 id="extend-1">出力スキーマを定義する</h3>
       <p><code>app/schemas/</code> に追加します。<code>legal.py</code> と同じ書式（Pydantic v2 ＋ 日本語 <code>description</code>）に揃えてください。</p>
     </li>
     <li>
-      <h3>エージェント本体を実装する</h3>
+      <h3 id="extend-2">エージェント本体を実装する</h3>
       <p><code>app/agents/estimate_agent.py</code> に2つの関数を置きます。<code>run_estimate()</code> が構造化結果を返し、<code>build_estimate_reply()</code> が説明文を返します。<strong>LLM は引数で受け取る純関数</strong>にすると、テストでモックできます。</p>
     </li>
     <li>
-      <h3>state にスロットを追加する</h3>
+      <h3 id="extend-3">state にスロットを追加する</h3>
       <p><code>app/agents/state.py</code> の <code>SumaiState</code> に、結果の格納先を1行追加します。</p>
     </li>
     <li>
-      <h3>ノードを書き、1行登録する</h3>
+      <h3 id="extend-4">ノードを書き、1行登録する</h3>
       <figure class="term">
         <figcaption>app/agents/orchestrator.py</figcaption>
 <pre><code>POST_HEARING_STEPS = [
@@ -803,7 +855,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
       <p>ノード関数は結果を state のスロットに入れ、説明文を <code>section("estimate", "概算見積", markdown)</code> で返します。連結と免責の付与は <code>compose_node</code> が一括で行います。</p>
     </li>
     <li>
-      <h3>外部インターフェースに繋ぐ</h3>
+      <h3 id="extend-5">外部インターフェースに繋ぐ</h3>
       <p><code>app/schemas/artifact.py</code> と <code>app/api/chat.py</code> の <code>ChatResponse</code> にそれぞれ1項目追加します。</p>
     </li>
   </ol>
@@ -842,7 +894,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
 <section id="issues">
   <h2><span class="sec-num">10</span>既知の問題と対処</h2>
 
-  <h3>① 応答時間 — CPU 推論では実演に耐えません</h3>
+  <h3 id="issues-1">① 応答時間 — CPU 推論では実演に耐えません</h3>
 
   <p>Ollama が GPU を使えるのは NVIDIA（CUDA）と AMD（ROCm）のみです。それ以外の環境では CPU 推論となり、開発機（14コア CPU / メモリ 15 GB / GPU なし）での実測は次のとおりでした。</p>
 
@@ -889,7 +941,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
 
   <hr>
 
-  <h3>② 坪／㎡ の単位取り違え — 3層の防御を実装済み</h3>
+  <h3 id="issues-2">② 坪／㎡ の単位取り違え — 3層の防御を実装済み</h3>
 
   <p>実機検証で見つかった実際の問題です。「35坪」（≒116㎡）という要望に対し、qwen2.5:14b は <code>約35㎡（約10.5坪）</code> と出力しました。坪の数値をそのまま㎡欄に書き、さらに階数まで同じフィールドに混入させていました。部屋面積の合計は 65㎡ 以上あり、「延床 35㎡」と自己矛盾しています。</p>
 
@@ -934,7 +986,7 @@ PY scripts/record_demo.py --persona C --verify</code></pre>
 
   <hr>
 
-  <h3>③ リポジトリ管理：<code>.env</code> が git 追跡下にあります</h3>
+  <h3 id="issues-3">③ リポジトリ管理：<code>.env</code> が git 追跡下にあります</h3>
 
   <p>既存の問題で、今回の変更で持ち込んだものではありません。ただし <code>REINFOLIB_API_KEY</code> が <code>.env</code> に入ったため、<strong>実際のキーを記入した時点でコミットされてしまいます</strong>（NFR-03「API キー等をリポジトリに含めない」に違反）。また <code>.pyc</code> が1つ追跡リストに残っています（<code>.gitignore</code> に <code>*.pyc</code> はありますが、既に追跡済みのファイルには効きません）。</p>
 
@@ -950,7 +1002,7 @@ git rm --cached sumai-agent/tests/__pycache__/test_acceptance.cpython-313-pytest
   <hr>
 
   
-  <h3>④ その他のトラブルシューティング</h3>
+  <h3 id="issues-4">④ その他のトラブルシューティング</h3>
   <div class="tablewrap">
     <table>
       <thead><tr><th>症状</th><th>原因と対処</th></tr></thead>
@@ -973,3 +1025,8 @@ git rm --cached sumai-agent/tests/__pycache__/test_acceptance.cpython-313-pytest
 </footer>
 
 </div>
+
+<a class="totop" href="#toc">↑ 目次へ</a>
+
+</body>
+</html>

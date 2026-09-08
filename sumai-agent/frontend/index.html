@@ -3,39 +3,164 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="スマイエージェント — マルチAIエージェント型の住宅意思決定支援デモ。ヒアリング／間取り3案生成／法規チェック（建ぺい率・容積率・高さ）／メーカー推薦までを1画面で試せます。">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#1a4a7a">
+<meta property="og:title" content="スマイエージェント — 住宅AIコンシェルジュ">
+<meta property="og:description" content="ヒアリング → 間取り3案 → 法規チェック → メーカー推薦までを通しで体験できる MVP デモ。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8F%A0%3C/text%3E%3C/svg%3E">
 <title>スマイエージェント — 住宅AIコンシェルジュ</title>
 <style>
+  /* ══════════════════════════════════════════════════════════
+     トークン
+     docs/法規チェックAI_ガイド.html と同じ設計・同じ変数名で定義している。
+     片方を変えたらもう片方も合わせること（2ファイルで見た目を揃えるため）。
+     ライトを完全定義し、ダークはトークンのみ上書きする。
+     ══════════════════════════════════════════════════════════ */
+  :root {
+    --paper:        #eef2f7;
+    --surface:      #ffffff;
+    --surface-2:    #f5f8fc;
+    --ink:          #16283a;
+    --ink-2:        #3d4f63;
+    --ink-3:        #5b6b7d;   /* 白背景で約5.1:1（WCAG AA 達成）。旧 #94a3b8 は 2.6:1 で不可 */
+    --rule:         #d6e0ea;
+    --rule-strong:  #b5c5d4;
+
+    --brand:        #2563a8;   /* 面（ボタン・ユーザー吹き出し）に使う */
+    --brand-strong: #1a4a7a;
+    --brand-ink:    #ffffff;   /* --brand の上に乗る文字 */
+    --brand-text:   #1a4a7a;   /* surface の上に乗る見出し・リンク */
+    --brand-soft:   #e8f0fa;
+
+    --ok:           #166534;
+    --ok-soft:      #dcfce7;
+    --ok-line:      #16a34a;
+    --warn:         #8a4b0b;
+    --warn-soft:    #fff7e6;
+    --warn-line:    #d97706;
+    --crit:         #991b1b;
+    --crit-soft:    #fee2e2;
+    --crit-line:    #dc2626;
+
+    --focus:        #1d4ed8;
+    --shadow:       0 1px 4px rgba(16,40,64,0.10);
+
+    --font-body: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+                 "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+
+    /* 住宅検討層は年齢層の幅が広い。本文は 0.95rem 以上、補助情報も 0.8rem を下限とする */
+    --fs-body: 0.95rem;
+    --fs-sm:   0.86rem;
+    --fs-xs:   0.8rem;
+    --radius:  12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:        #0f1720;
+      --surface:      #16212c;
+      --surface-2:    #1c2836;
+      --ink:          #e6edf4;
+      --ink-2:        #b8c6d4;
+      --ink-3:        #93a4b5;
+      --rule:         #2b3a4a;
+      --rule-strong:  #3e5265;
+      --brand:        #2f6ba8;
+      --brand-strong: #24547f;
+      --brand-text:   #8fc0ef;
+      --brand-soft:   #1b2c3d;
+      --ok:           #8fe0ab;
+      --ok-soft:      #14301f;
+      --warn:         #e5b169;
+      --warn-soft:    #2c2318;
+      --crit:         #ef9a8c;
+      --crit-soft:    #33201d;
+      --focus:        #8fc0ef;
+      --shadow:       0 1px 4px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:        #0f1720;
+    --surface:      #16212c;
+    --surface-2:    #1c2836;
+    --ink:          #e6edf4;
+    --ink-2:        #b8c6d4;
+    --ink-3:        #93a4b5;
+    --rule:         #2b3a4a;
+    --rule-strong:  #3e5265;
+    --brand:        #2f6ba8;
+    --brand-strong: #24547f;
+    --brand-text:   #8fc0ef;
+    --brand-soft:   #1b2c3d;
+    --ok:           #8fe0ab;
+    --ok-soft:      #14301f;
+    --warn:         #e5b169;
+    --warn-soft:    #2c2318;
+    --crit:         #ef9a8c;
+    --crit-soft:    #33201d;
+    --focus:        #8fc0ef;
+    --shadow:       0 1px 4px rgba(0,0,0,0.4);
+  }
+
   /* ─── リセット & ベース ─── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
-    background: #f0f4f8;
+    font-family: var(--font-body);
+    font-size: var(--fs-body);
+    background: var(--paper);
+    color: var(--ink);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
   }
 
+  /* 全インタラクティブ要素に統一したフォーカスリング */
+  a:focus-visible, button:focus-visible, summary:focus-visible,
+  textarea:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
+  .skip-link {
+    position: absolute; left: 8px; top: -48px; z-index: 200;
+    background: var(--surface); color: var(--brand-text);
+    padding: 8px 14px; border-radius: 8px; border: 1.5px solid var(--brand);
+    font-size: var(--fs-sm); font-weight: 700; text-decoration: none;
+    transition: top 0.15s;
+  }
+  .skip-link:focus { top: 8px; }
+
   /* ─── ヘッダー ─── */
   header {
-    background: linear-gradient(135deg, #1a4a7a 0%, #2563a8 100%);
+    background: linear-gradient(135deg, var(--brand-strong) 0%, var(--brand) 100%);
     color: #fff;
-    padding: 0 24px;
-    height: 60px;
+    padding: 10px 20px;
+    min-height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;               /* スマホ幅でも横溢れさせない */
+    gap: 6px 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     position: sticky;
     top: 0;
     z-index: 100;
   }
-  header h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: 0.05em; }
+  header h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: 0.04em; }
   header .badge {
     background: rgba(255,255,255,0.2);
     padding: 3px 10px;
     border-radius: 20px;
-    font-size: 0.72rem;
-    border: 1px solid rgba(255,255,255,0.3);
+    font-size: var(--fs-xs);
+    border: 1px solid rgba(255,255,255,0.35);
   }
 
   /* ─── メインレイアウト ─── */
@@ -47,33 +172,50 @@
     width: 100%;
     padding: 16px;
     gap: 16px;
+    align-items: flex-start;
   }
 
-  /* ─── 左サイドバー ─── */
-  .sidebar {
-    width: 260px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
+  .sidebar { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+  .right-panel { width: 230px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+  .chat-container { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
+  /* ─── カード ─── */
   .card {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
     padding: 16px;
   }
-  .card h2 {
-    font-size: 0.82rem;
+  .card h2, .card .card-title {
+    font-size: var(--fs-sm);
     font-weight: 700;
-    color: #1a4a7a;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    color: var(--brand-text);
+    letter-spacing: 0.06em;
     margin-bottom: 10px;
     padding-bottom: 8px;
-    border-bottom: 2px solid #e8f0fa;
+    border-bottom: 2px solid var(--brand-soft);
   }
+  /* 折りたたみカード（狭幅で場所を空けるため。広幅でも既定は開いた状態） */
+  details.card > summary {
+    list-style: none;
+    cursor: pointer;
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    color: var(--brand-text);
+    letter-spacing: 0.06em;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--brand-soft);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 32px;
+  }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::after { content: "▾"; color: var(--ink-3); font-size: 0.9rem; }
+  details.card[open] > summary::after { content: "▴"; }
+  details.card > .card-body { padding-top: 10px; }
 
   /* ─── ペルソナボタン ─── */
   .preset-btn {
@@ -81,467 +223,436 @@
     width: 100%;
     text-align: left;
     padding: 10px 12px;
-    border: 1.5px solid #d1dfe8;
+    border: 1.5px solid var(--rule);
     border-radius: 8px;
-    background: #f7faff;
+    background: var(--surface-2);
     cursor: pointer;
-    font-size: 0.82rem;
-    color: #334155;
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    color: var(--ink-2);
     margin-bottom: 6px;
-    transition: all 0.15s;
+    transition: border-color 0.15s, background 0.15s;
   }
-  .preset-btn:hover { border-color: #2563a8; background: #eff5ff; color: #1a4a7a; }
-  .preset-btn .persona-name { font-weight: 700; font-size: 0.85rem; color: #1a4a7a; display: block; margin-bottom: 2px; }
-  .preset-btn .persona-desc { font-size: 0.76rem; color: #64748b; }
+  .preset-btn:hover { border-color: var(--brand); background: var(--brand-soft); }
+  .preset-btn .persona-name { font-weight: 700; font-size: var(--fs-sm); color: var(--brand-text); display: block; margin-bottom: 2px; }
+  .preset-btn .persona-desc { font-size: var(--fs-xs); color: var(--ink-3); }
+
+  .inline-error { font-size: var(--fs-sm); color: var(--crit); margin-bottom: 6px; }
+  .retry-btn {
+    font-family: inherit;
+    font-size: var(--fs-xs);
+    padding: 6px 12px;
+    min-height: 34px;
+    border: 1.5px solid var(--rule-strong);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .retry-btn:hover { background: var(--brand-soft); border-color: var(--brand); }
 
   /* ─── 要件サマリー ─── */
-  .req-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    margin-bottom: 5px;
-    font-size: 0.8rem;
+  .req-item { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 5px; font-size: var(--fs-sm); }
+  .req-label { flex-shrink: 0; font-weight: 600; color: var(--ink-2); width: 72px; font-size: var(--fs-xs); }
+  .req-value { color: var(--ink); }
+  .req-missing { color: var(--ink-3); font-style: italic; }
+  .complete-badge, .incomplete-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 20px;
+    font-size: var(--fs-xs); font-weight: 700; margin-bottom: 8px;
   }
-  .req-label {
-    flex-shrink: 0;
-    font-weight: 600;
-    color: #475569;
-    width: 68px;
-    font-size: 0.75rem;
-  }
-  .req-value { color: #1e293b; font-size: 0.8rem; }
-  .req-missing { color: #94a3b8; font-style: italic; font-size: 0.76rem; }
-  .complete-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: #dcfce7;
-    color: #166534;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 0.76rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-  .incomplete-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: #fef9c3;
-    color: #92400e;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 0.76rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
+  .complete-badge { background: var(--ok-soft); color: var(--ok); }
+  .incomplete-badge { background: var(--warn-soft); color: var(--warn); }
 
   /* ─── チャットエリア ─── */
-  .chat-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-
   #chat-messages {
     flex: 1;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
     padding: 20px;
     overflow-y: auto;
-    min-height: 460px;
-    max-height: 600px;
+    /* 画面高に追従させる（低いノートPCで入力欄が画面外に出るのを防ぐ） */
+    min-height: clamp(260px, 42dvh, 460px);
+    max-height: clamp(320px, 62dvh, 660px);
     display: flex;
     flex-direction: column;
     gap: 14px;
+    scroll-behavior: smooth;
   }
 
   /* ─── メッセージバブル ─── */
   .message { display: flex; gap: 10px; animation: fadeIn 0.25s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-
   .message.user { flex-direction: row-reverse; }
   .message .avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    flex-shrink: 0;
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+    background: var(--brand-soft);
   }
-  .message.ai .avatar { background: #e8f0fa; }
-  .message.user .avatar { background: #e0f2fe; }
-
+  .message.user .avatar { background: var(--surface-2); border: 1px solid var(--rule); }
   .bubble {
     max-width: 75%;
     padding: 12px 16px;
     border-radius: 14px;
-    font-size: 0.88rem;
-    line-height: 1.65;
-    color: #1e293b;
+    font-size: var(--fs-body);
+    line-height: 1.7;
+    color: var(--ink);
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-bottom-left-radius: 4px;
   }
-  .message.ai .bubble { background: #f1f5f9; border-bottom-left-radius: 4px; }
-  .message.user .bubble { background: #2563a8; color: #fff; border-bottom-right-radius: 4px; }
-  .bubble a { color: #3b82f6; }
-  .message.user .bubble a { color: #bfdbfe; }
+  .message.user .bubble {
+    background: var(--brand); color: var(--brand-ink);
+    border-color: var(--brand);
+    border-bottom-left-radius: 14px; border-bottom-right-radius: 4px;
+  }
+  .bubble a { color: var(--brand-text); }
+  .message.user .bubble a { color: #dbeafe; }
+  /* システム由来のエラー。AIの発話と混同させない */
+  .message.error .avatar { background: var(--crit-soft); }
+  .message.error .bubble { background: var(--crit-soft); border: 1px solid var(--crit-line); color: var(--ink); }
+  .message.error .err-head { font-weight: 700; color: var(--crit); display: block; margin-bottom: 4px; }
+  .message.error .err-body { white-space: pre-line; }
+
+  /* ─── 成果物ブロック（チャットの時系列の中に差し込む） ─── */
+  .artifact-block { animation: fadeIn 0.25s ease; }
+  .artifact-block > .card { padding: 14px; }
+  .block-title {
+    font-size: var(--fs-sm); font-weight: 700; color: var(--brand-text);
+    letter-spacing: 0.06em; margin-bottom: 10px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--brand-soft);
+  }
 
   /* ─── 間取り案カード ─── */
-  .plans-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
+  .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
   .plan-card {
-    background: #fff;
-    border: 1.5px solid #e2e8f0;
+    background: var(--surface);
+    border: 1.5px solid var(--rule);
     border-radius: 10px;
     padding: 12px;
-    transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .plan-card:hover { border-color: #2563a8; box-shadow: 0 2px 8px rgba(37,99,168,0.12); }
   .plan-concept {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #fff;
-    background: #2563a8;
-    padding: 3px 8px;
-    border-radius: 5px;
-    display: inline-block;
-    margin-bottom: 8px;
+    font-size: var(--fs-sm); font-weight: 700;
+    color: var(--brand-ink); background: var(--brand);
+    padding: 3px 8px; border-radius: 5px;
+    display: inline-block; margin-bottom: 8px;
   }
-  .plan-area { font-size: 0.78rem; color: #64748b; margin-bottom: 4px; }
+  .plan-area { font-size: var(--fs-sm); color: var(--ink-2); margin-bottom: 4px; }
   .plan-cost {
-    font-size: 0.76rem;
-    background: #fef3c7;
-    color: #92400e;
-    padding: 2px 6px;
-    border-radius: 4px;
-    display: inline-block;
-    margin-bottom: 6px;
+    font-size: var(--fs-xs); background: var(--warn-soft); color: var(--warn);
+    padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 6px;
   }
-  .room-list { font-size: 0.76rem; color: #475569; }
+  .room-list { font-size: var(--fs-xs); color: var(--ink-2); }
   .room-list li { list-style: none; padding: 1px 0; }
-  .room-list li::before { content: "▸ "; color: #94a3b8; }
-  .plan-note { font-size: 0.74rem; color: #94a3b8; margin-top: 6px; font-style: italic; }
+  .room-list li::before { content: "▸ "; color: var(--ink-3); }
+  .room-note, .room-more { color: var(--ink-3); font-size: var(--fs-xs); }
+  .plan-note { font-size: var(--fs-xs); color: var(--ink-3); margin-top: 6px; font-style: italic; }
 
   /* ─── 間取り図（SVG） ─── */
-  .floorplan-tabs { display: flex; gap: 4px; margin-top: 10px; }
+  .floorplan-tabs { display: flex; gap: 4px; margin-top: 10px; flex-wrap: wrap; }
   .floorplan-tab {
-    font-size: 0.72rem;
-    padding: 3px 10px;
-    border: 1px solid #cbd5e1;
-    border-radius: 5px;
-    background: #f8fafc;
-    color: #475569;
+    font-family: inherit;
+    font-size: var(--fs-xs);
+    /* タップ領域を 44px 以上確保する */
+    min-height: 44px; min-width: 44px;
+    padding: 6px 14px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--ink-2);
     cursor: pointer;
   }
-  .floorplan-tab.active { background: #2563a8; color: #fff; border-color: #2563a8; }
-  .floorplan-img-wrap {
-    margin-top: 6px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    overflow: auto;
-    background: #fff;
+  .floorplan-tab[aria-selected="true"] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 700; }
+  .floorplan-img-wrap { margin-top: 6px; border: 1px solid var(--rule); border-radius: 8px; overflow: auto; background: #fff; }
+  /* 読み込み前に領域を確保してレイアウトシフト（CLS）を防ぐ */
+  .floorplan-img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; }
+  .floorplan-error { font-size: var(--fs-xs); color: var(--warn); padding: 8px 10px; }
+
+  /* ─── 入力欄 ─── */
+  .input-area { display: flex; gap: 8px; margin-top: 10px; align-items: flex-end; }
+  #user-input {
+    flex: 1;
+    padding: 11px 16px;
+    border: 1.5px solid var(--rule-strong);
+    border-radius: 10px;
+    /* iOS Safari は 16px 未満の入力欄でフォーカス時に自動ズームするため 1rem を下回らせない */
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--ink);
+    background: var(--surface);
+    resize: none;
+    min-height: 48px;
+    max-height: 140px;
+    line-height: 1.5;
+    transition: border-color 0.15s;
   }
-  .floorplan-img { display: block; max-width: 100%; height: auto; }
-  .artifact-link {
-    font-size: 0.76rem;
-    color: #2563a8;
-    text-decoration: none;
-    display: inline-block;
-    margin-bottom: 8px;
+  #user-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(37,99,168,0.15); }
+  #user-input:disabled { background: var(--surface-2); color: var(--ink-3); cursor: not-allowed; }
+  #send-btn {
+    padding: 11px 20px;
+    background: var(--brand);
+    color: var(--brand-ink);
+    border: none;
+    border-radius: 10px;
+    font-size: var(--fs-body);
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: 600;
+    white-space: nowrap;
+    min-height: 48px;
   }
-  .artifact-link:hover { text-decoration: underline; }
+  #send-btn:hover:not(:disabled) { background: var(--brand-strong); }
+  #send-btn:disabled { background: var(--ink-3); cursor: not-allowed; }
 
   /* ─── タイピングインジケーター ─── */
   .typing { display: flex; align-items: center; gap: 5px; padding: 4px 0; }
-  .typing span {
-    width: 7px; height: 7px;
-    background: #94a3b8;
-    border-radius: 50%;
-    animation: bounce 1.2s infinite;
-  }
+  .typing span { width: 7px; height: 7px; background: var(--ink-3); border-radius: 50%; animation: bounce 1.2s infinite; }
   .typing span:nth-child(2) { animation-delay: 0.2s; }
   .typing span:nth-child(3) { animation-delay: 0.4s; }
   @keyframes bounce { 0%,60%,100%{ transform: translateY(0); } 30%{ transform: translateY(-6px); } }
 
-  /* ─── 入力欄 ─── */
-  .input-area {
-    display: flex;
-    gap: 8px;
-    margin-top: 10px;
-    align-items: flex-end;
-  }
-  #user-input {
-    flex: 1;
-    padding: 11px 16px;
-    border: 1.5px solid #d1dfe8;
-    border-radius: 10px;
-    font-size: 0.9rem;
-    font-family: inherit;
-    resize: none;
-    outline: none;
-    min-height: 44px;
-    max-height: 120px;
-    transition: border-color 0.15s;
-    line-height: 1.5;
-  }
-  #user-input:focus { border-color: #2563a8; box-shadow: 0 0 0 3px rgba(37,99,168,0.1); }
-  #send-btn {
-    padding: 11px 20px;
-    background: #2563a8;
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background 0.15s;
-    white-space: nowrap;
-    height: 44px;
-  }
-  #send-btn:hover:not(:disabled) { background: #1a4a7a; }
-  #send-btn:disabled { background: #94a3b8; cursor: not-allowed; }
-
   /* ─── 免責バナー ─── */
   .disclaimer {
-    font-size: 0.73rem;
-    color: #94a3b8;
+    font-size: var(--fs-sm);
+    color: var(--ink-2);          /* 責任範囲の告知なので本文並みの可読性にする */
     text-align: center;
-    padding: 6px 0 2px;
+    padding: 8px 4px 2px;
+    line-height: 1.6;
   }
 
   /* ─── メーカー推薦カード ─── */
-  .maker-rec-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
+  .maker-rec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
   .maker-rec-card {
-    background: #fff;
-    border: 1.5px solid #e2e8f0;
+    background: var(--surface);
+    border: 1.5px solid var(--rule);
     border-radius: 10px;
     padding: 12px;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    position: relative;
-  }
-  .maker-rec-card:hover { border-color: #2563a8; box-shadow: 0 2px 8px rgba(37,99,168,0.12); }
-  .maker-rank-badge {
-    position: absolute;
-    top: -8px;
-    left: 10px;
-    background: #2563a8;
-    color: #fff;
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
   }
   .maker-rec-card.portal { border-color: #7c3aed; }
+  /* バッジは絶対配置をやめ、カード上部の行として領域を確保する */
+  .maker-rec-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .maker-rank-badge {
+    background: var(--brand); color: var(--brand-ink);
+    font-size: var(--fs-xs); font-weight: 700;
+    padding: 2px 8px; border-radius: 10px;
+  }
   .maker-rec-card.portal .maker-rank-badge { background: #7c3aed; }
-  .maker-type-label {
-    font-size: 0.7rem;
-    color: #64748b;
-    margin: 14px 0 4px;
-    font-weight: 600;
-  }
-  .maker-rec-name {
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: #1a4a7a;
-    margin-bottom: 6px;
-  }
-  .maker-rec-reason {
-    font-size: 0.78rem;
-    color: #334155;
-    line-height: 1.55;
-    margin-bottom: 6px;
-  }
+  .maker-type-label { font-size: var(--fs-xs); color: var(--ink-3); font-weight: 600; }
+  .maker-rec-name { font-size: 1rem; font-weight: 700; color: var(--brand-text); margin-bottom: 6px; }
+  .maker-rec-reason { font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.6; margin-bottom: 6px; }
   .maker-rec-price {
-    font-size: 0.74rem;
-    background: #fef3c7;
-    color: #92400e;
-    padding: 2px 6px;
-    border-radius: 4px;
-    display: inline-block;
-    margin-bottom: 6px;
+    font-size: var(--fs-xs); background: var(--warn-soft); color: var(--warn);
+    padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 6px; align-self: flex-start;
   }
-  .maker-rec-strengths {
-    font-size: 0.74rem;
-    color: #475569;
-    margin: 4px 0;
+  .maker-rec-strengths { font-size: var(--fs-xs); color: var(--ink-2); margin: 4px 0; }
+  .maker-strength-chip {
+    display: inline-block; background: var(--surface-2); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 1px 5px; margin: 1px 2px 1px 0; font-size: var(--fs-xs); color: var(--ink-2);
   }
   .maker-rec-caution {
-    font-size: 0.72rem;
-    color: #b45309;
-    background: #fffbeb;
-    border-left: 2px solid #f59e0b;
-    padding: 3px 6px;
-    margin-top: 5px;
-    border-radius: 0 4px 4px 0;
+    font-size: var(--fs-xs); color: var(--warn); background: var(--warn-soft);
+    border-left: 2px solid var(--warn-line); padding: 4px 6px; margin-top: 5px; border-radius: 0 4px 4px 0;
   }
   .maker-rec-link {
-    display: inline-block;
-    margin-top: 8px;
-    font-size: 0.76rem;
-    color: #2563a8;
-    text-decoration: none;
-    font-weight: 600;
+    display: inline-block; margin-top: 8px; font-size: var(--fs-sm);
+    color: var(--brand-text); font-weight: 600; min-height: 44px; line-height: 44px;
   }
-  .maker-rec-link:hover { text-decoration: underline; }
 
   /* ─── 送客バナー ─── */
   .cta-banner {
-    background: linear-gradient(135deg, #1a4a7a, #2563a8);
+    background: linear-gradient(135deg, var(--brand-strong), var(--brand));
     color: #fff;
     border-radius: 10px;
     padding: 14px 18px;
-    margin-top: 12px;
   }
-  .cta-banner h3 { font-size: 0.9rem; margin-bottom: 6px; }
-  .cta-banner p { font-size: 0.8rem; opacity: 0.9; margin-bottom: 12px; }
+  .cta-banner h3 { font-size: var(--fs-body); margin-bottom: 6px; }
+  .cta-banner p { font-size: var(--fs-sm); margin-bottom: 10px; line-height: 1.6; }
   .maker-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   /* メーカー公式サイトへのリンク。<a> なので押せば実際に遷移する */
   .maker-chip {
-    display: inline-block;
+    display: inline-flex; align-items: center;
     background: rgba(255,255,255,0.15);
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255,255,255,0.45);
     color: #fff;
     text-decoration: none;
-    padding: 4px 10px;
+    padding: 8px 12px;
+    min-height: 44px;
     border-radius: 16px;
-    font-size: 0.76rem;
-    cursor: pointer;
-    transition: background 0.15s;
+    font-size: var(--fs-sm);
   }
-  .maker-chip:hover { background: rgba(255,255,255,0.28); }
+  .maker-chip:hover { background: rgba(255,255,255,0.3); }
   .maker-chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .cta-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .cta-action {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #fff; color: var(--brand-strong);
+    border: none; border-radius: 8px;
+    padding: 8px 14px; min-height: 44px;
+    font-family: inherit; font-size: var(--fs-sm); font-weight: 700;
+    text-decoration: none; cursor: pointer;
+  }
+  .cta-action:hover { background: #e8f0fa; }
 
   /* ─── ユーティリティ ─── */
-  .hidden { display: none !important; }
+  [hidden] { display: none !important; }
   .new-session-btn {
-    display: inline-block;
-    padding: 7px 14px;
-    background: #f1f5f9;
-    color: #475569;
-    border: 1.5px solid #d1dfe8;
+    display: block;
+    padding: 10px 14px;
+    min-height: 44px;
+    background: var(--surface);
+    color: var(--ink-2);
+    border: 1.5px solid var(--rule-strong);
     border-radius: 8px;
-    font-size: 0.78rem;
+    font-size: var(--fs-sm);
     cursor: pointer;
-    transition: all 0.15s;
     font-family: inherit;
     width: 100%;
     text-align: center;
   }
-  .new-session-btn:hover { background: #e2e8f0; }
+  .new-session-btn:hover { background: var(--surface-2); }
 
   /* ─── markdown 簡易スタイル ─── */
   .bubble strong { font-weight: 700; }
   .bubble em { font-style: italic; }
-  .bubble h3 { font-size: 0.9rem; margin: 8px 0 4px; color: #1a4a7a; }
-  .bubble blockquote { border-left: 3px solid #d1dfe8; padding-left: 8px; color: #64748b; margin: 6px 0; font-size: 0.82rem; }
+  .bubble h3 { font-size: 1rem; margin: 8px 0 4px; color: var(--brand-text); }
+  .message.user .bubble h3 { color: #fff; }
+  .bubble blockquote { border-left: 3px solid var(--rule-strong); padding-left: 8px; color: var(--ink-2); margin: 6px 0; font-size: var(--fs-sm); }
+  .message.user .bubble blockquote { color: #e2ecf7; }
   .bubble ul, .bubble ol { padding-left: 1.2em; margin: 4px 0; }
   .bubble li { margin-bottom: 2px; }
-  .bubble code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 0.82em; }
-  .bubble hr { border: none; border-top: 1px solid #e2e8f0; margin: 8px 0; }
+  .bubble code { background: var(--surface); border: 1px solid var(--rule); padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); font-size: 0.85em; }
+  .bubble hr { border: none; border-top: 1px solid var(--rule); margin: 8px 0; }
 
-  /* ─── 右カラム（間取り表示パネル） ─── */
-  .right-panel { width: 220px; flex-shrink: 0; }
-  @media (max-width: 900px) { .right-panel { display: none; } }
+  /* ─── フロー表示（クラス切り替え。JS 内で style 文字列を組み立てない） ─── */
+  .flow-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .step { padding: 7px 9px; border-radius: 6px; font-size: var(--fs-sm); color: var(--ink-3); }
+  .step.is-idle { color: var(--ink-3); }
+  .step.is-active { background: var(--brand-soft); color: var(--brand-text); font-weight: 700; }
+  .step.is-done { background: var(--ok-soft); color: var(--ok); font-weight: 700; }
+  .step .step-state { font-size: var(--fs-xs); font-weight: 400; }
 
   /* ─── 法規チェックパネル ─── */
   .site-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 4px 12px;
-    font-size: 0.78rem;
-    background: #f7faff;
-    border: 1px solid #e2e8f0;
+    font-size: var(--fs-sm);
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
     border-radius: 8px;
     padding: 10px 12px;
     margin-bottom: 10px;
   }
   .site-grid div { display: flex; gap: 6px; }
-  .site-grid .site-label { color: #64748b; flex-shrink: 0; }
-  .site-grid .site-value { color: #1e293b; font-weight: 600; }
+  .site-grid .site-label { color: var(--ink-3); flex-shrink: 0; }
+  .site-grid .site-value { color: var(--ink); font-weight: 600; }
   .site-source {
     grid-column: 1 / -1;
-    font-size: 0.73rem;
-    color: #94a3b8;
-    border-top: 1px dashed #d1dfe8;
+    font-size: var(--fs-xs);
+    color: var(--ink-2);
+    border-top: 1px dashed var(--rule-strong);
     padding-top: 6px;
     margin-top: 2px;
     display: block !important;
   }
 
-  .legal-plan {
-    border: 1.5px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-  }
-  .legal-plan.status-ok { border-left: 4px solid #16a34a; }
-  .legal-plan.status-ng { border-left: 4px solid #dc2626; }
-  .legal-plan.status-unknown { border-left: 4px solid #94a3b8; }
+  .legal-plan { border: 1.5px solid var(--rule); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .legal-plan.status-ok { border-left: 4px solid var(--ok-line); }
+  .legal-plan.status-ng { border-left: 4px solid var(--crit-line); }
+  .legal-plan.status-unknown { border-left: 4px solid var(--rule-strong); }
   .legal-plan-head {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #1a4a7a;
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    font-size: var(--fs-sm); font-weight: 700; color: var(--brand-text);
+    margin-bottom: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   }
-  .legal-status-badge {
-    font-size: 0.72rem;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-weight: 700;
-  }
-  .status-ok .legal-status-badge { background: #dcfce7; color: #166534; }
-  .status-ng .legal-status-badge { background: #fee2e2; color: #991b1b; }
-  .status-unknown .legal-status-badge { background: #f1f5f9; color: #475569; }
+  .legal-status-badge { font-size: var(--fs-xs); padding: 2px 8px; border-radius: 12px; font-weight: 700; }
+  .status-ok .legal-status-badge { background: var(--ok-soft); color: var(--ok); }
+  .status-ng .legal-status-badge { background: var(--crit-soft); color: var(--crit); }
+  .status-unknown .legal-status-badge { background: var(--surface-2); color: var(--ink-2); }
+  .legal-summary { font-size: var(--fs-sm); color: var(--ink-2); margin-top: 6px; }
 
-  .legal-items { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+  /* 5列の表は狭幅で確実に破綻するため、横スクロールのラッパーを必ず噛ませる */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; }
+  .legal-items { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); min-width: 480px; }
   .legal-items th, .legal-items td {
-    text-align: left;
-    padding: 3px 6px;
-    border-bottom: 1px solid #f1f5f9;
-    vertical-align: top;
+    text-align: left; padding: 5px 8px;
+    border-bottom: 1px solid var(--rule); vertical-align: top;
   }
-  .legal-items th { color: #64748b; font-weight: 600; font-size: 0.73rem; }
-  .legal-items .col-basis { color: #94a3b8; font-size: 0.72rem; white-space: nowrap; }
+  .legal-items th { color: var(--ink-2); font-weight: 600; font-size: var(--fs-xs); background: var(--surface-2); }
+  .legal-items .col-basis { color: var(--ink-2); font-size: var(--fs-xs); }
 
-  .flag-list { font-size: 0.77rem; color: #475569; }
-  .flag-list li { list-style: none; padding: 3px 0; line-height: 1.5; }
-  .flag-item-name { font-weight: 700; color: #1a4a7a; }
-  .flag-basis { color: #94a3b8; font-size: 0.72rem; }
-  .legal-disclaimer {
-    font-size: 0.74rem;
-    color: #92400e;
-    background: #fffbeb;
-    border: 1px solid #fde68a;
-    border-radius: 6px;
-    padding: 8px 10px;
-    margin-top: 10px;
-    line-height: 1.6;
+  .flag-list { font-size: var(--fs-sm); color: var(--ink-2); }
+  .flag-list li { list-style: none; padding: 3px 0; line-height: 1.6; }
+  .flag-item-name { font-weight: 700; color: var(--brand-text); }
+  .flag-basis { color: var(--ink-2); font-size: var(--fs-xs); }
+  /* 重要度は色（絵文字）だけに頼らずテキストを併記する */
+  .severity {
+    display: inline-block; font-size: var(--fs-xs); font-weight: 700;
+    border: 1px solid currentColor; border-radius: 3px; padding: 0 5px; margin-right: 4px;
   }
-  .legal-subhead {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #475569;
-    margin: 12px 0 6px;
+  .severity.high { color: var(--crit); background: var(--crit-soft); }
+  .severity.medium { color: var(--warn); background: var(--warn-soft); }
+  .severity.low { color: var(--ink-2); background: var(--surface-2); }
+
+  .legal-disclaimer {
+    font-size: var(--fs-sm); color: var(--warn);
+    background: var(--warn-soft); border: 1px solid var(--warn-line);
+    border-radius: 6px; padding: 8px 10px; margin-top: 10px; line-height: 1.7;
+  }
+  .legal-subhead { font-size: var(--fs-sm); font-weight: 700; color: var(--ink-2); margin: 12px 0 6px; }
+
+  .panel-note { font-size: var(--fs-xs); color: var(--ink-2); line-height: 1.7; }
+  .artifact-link { font-size: var(--fs-sm); color: var(--brand-text); font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
+
+  /* ─── レスポンシブ ─── */
+  @media (max-width: 900px) {
+    main { flex-direction: column; align-items: stretch; }
+    .sidebar, .right-panel { width: 100%; }
+    /* 右パネルは装飾ではなく「フロー」と「成果物リンク」という機能。
+       狭幅では消さずにチャットの下へ回す */
+    .right-panel { order: 3; }
+    .chat-container { order: 2; }
+    .sidebar { order: 1; }
+    #chat-messages { max-height: clamp(300px, 55dvh, 600px); }
+  }
+  @media (max-width: 560px) {
+    main { padding: 10px; gap: 10px; }
+    header h1 { font-size: 1.05rem; }
+    .bubble { max-width: 88%; }
+    #chat-messages { padding: 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+
+  /* ─── 印刷（商談に持参するための1枚出力） ─── */
+  @media print {
+    :root { --paper: #fff; --surface: #fff; --surface-2: #fff; --ink: #000; --ink-2: #222; --ink-3: #444; }
+    body { background: #fff; }
+    header { position: static; background: #fff; color: #000; box-shadow: none; border-bottom: 2px solid #000; }
+    header .badge { border-color: #000; color: #000; }
+    main { display: block; max-width: none; padding: 0; }
+    .no-print, .input-area, .new-session-btn, .skip-link,
+    #preset-card, #phase2-card, .cta-actions, .floorplan-tabs { display: none !important; }
+    .sidebar, .right-panel, .chat-container { width: auto; }
+    #chat-messages { max-height: none; min-height: 0; overflow: visible; box-shadow: none; border: none; padding: 0; }
+    .message.ai .bubble, .message.user .bubble { background: #fff; color: #000; border: 1px solid #999; max-width: 100%; }
+    .card, .plan-card, .legal-plan, .maker-rec-card { break-inside: avoid; box-shadow: none; }
+    .artifact-block { break-inside: avoid; }
+    .cta-banner { background: #fff; color: #000; border: 1px solid #000; }
+    .legal-items { min-width: 0; font-size: 9pt; }
+    a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 8pt; color: #444; word-break: break-all; }
   }
 </style>
 </head>
 <body>
+
+<a class="skip-link" href="#chat-messages">チャット本文へスキップ</a>
 
 <header>
   <h1>🏠 スマイエージェント</h1>
@@ -550,114 +661,90 @@
 
 <main>
   <!-- ─── 左サイドバー ─── -->
-  <aside class="sidebar">
+  <aside class="sidebar" aria-label="デモ操作と住宅要件書">
     <!-- デモプリセット -->
-    <div class="card">
-      <h2>デモシナリオ</h2>
-      <div id="preset-list">
-        <p style="font-size:0.78rem;color:#94a3b8;">読み込み中…</p>
+    <details class="card no-print" id="preset-card" open>
+      <summary>デモシナリオ</summary>
+      <div class="card-body" id="preset-list">
+        <p class="panel-note">読み込み中…</p>
       </div>
-    </div>
+    </details>
 
     <!-- 住宅要件書 -->
-    <div class="card">
-      <h2>住宅要件書</h2>
-      <div id="requirements-panel">
-        <p style="font-size:0.78rem;color:#94a3b8;">ヒアリング前</p>
+    <details class="card" id="requirements-card" open>
+      <summary>住宅要件書</summary>
+      <div class="card-body" id="requirements-panel">
+        <p class="panel-note">ヒアリング前</p>
       </div>
-    </div>
+    </details>
 
     <!-- セッションリセット -->
-    <button class="new-session-btn" id="new-session-btn">🔄 新しいセッションを開始</button>
+    <button class="new-session-btn no-print" id="new-session-btn" type="button">🔄 新しいセッションを開始</button>
   </aside>
 
   <!-- ─── チャットエリア ─── -->
   <div class="chat-container">
-    <div id="chat-messages">
+    <div id="chat-messages" role="log" aria-live="polite" aria-relevant="additions"
+         aria-label="AIとの会話および生成結果" tabindex="0">
       <!-- ウェルカムメッセージ -->
       <div class="message ai">
-        <div class="avatar">🏠</div>
+        <div class="avatar" aria-hidden="true">🏠</div>
         <div class="bubble">
           <strong>こんにちは！スマイエージェントです。</strong><br><br>
           住まいづくりのご相談を、AIがお手伝いします。<br><br>
-          ご要望をお気軽にお話しください。家族構成・ご予算・土地の有無・希望の広さなどを教えていただければ、<strong>コンセプトの異なる3つの間取り案</strong>をご提案し、<strong>建ぺい率・容積率・高さの法規チェック</strong>まで行います！<br><br>
+          ご要望をお気軽にお話しください。家族構成・ご予算・土地の有無・希望の広さなどを教えていただければ、<strong>コンセプトの異なる3つの間取り案</strong>をご提案し、<strong>建ぺい率・容積率・高さの法規チェック</strong>、さらに<strong>ハウスメーカーの推薦</strong>まで行います。<br><br>
           土地をお持ちの場合は<strong>敷地の広さ・用途地域・前面道路の幅</strong>も教えていただけると、より精度の高い法規チェックができます。<br><br>
           左のパネルから「デモシナリオ」を選ぶと、サンプルで試すこともできます。
         </div>
       </div>
     </div>
 
-    <!-- 間取り案表示エリア -->
-    <div id="plans-container" class="hidden" style="margin-top:10px;"></div>
-
-    <!-- 法規チェック結果表示エリア -->
-    <div id="legal-container" class="hidden" style="margin-top:10px;"></div>
-    <!-- メーカー推薦カード表示エリア -->
-    <div id="maker-rec-container" class="hidden" style="margin-top:10px;"></div>
-
-    <!-- 送客バナー -->
-    <div id="cta-banner" class="cta-banner hidden">
-      <h3>📋 ハウスメーカーへの相談・来場予約</h3>
-      <p>ご提案した間取り案を持参すれば、商談がスムーズになります。メーカー名を押すと公式サイトが別タブで開きます（各社の得意分野と価格帯はマウスを乗せると表示されます）。</p>
-      <p>ご提案した間取り案・推薦メーカーを持参すれば、商談がスムーズになります。</p>
-      <div id="maker-chips" class="maker-chips"></div>
-    </div>
-
     <!-- 入力エリア -->
-    <div class="input-area">
+    <form class="input-area no-print" id="input-form">
+      <label class="visually-hidden" for="user-input">ご要望の入力</label>
       <textarea
         id="user-input"
         placeholder="ご要望をご自由にお話しください…（Shift+Enterで改行、Enterで送信）"
         rows="1"
       ></textarea>
-      <button id="send-btn">送信 ▶</button>
-    </div>
+      <button id="send-btn" type="submit">送信 ▶</button>
+    </form>
 
-    <div class="disclaimer">
+    <p class="disclaimer">
       ⚠️ 本サービスはAIによる概算・参考情報です。詳細設計・法規確認・正確な見積は建築士・ハウスメーカーにご相談ください。
-    </div>
+    </p>
   </div>
 
   <!-- ─── 右パネル ─── -->
-  <aside class="right-panel">
-    <div class="card">
-      <h2>フロー</h2>
-      <div id="flow-indicator" style="font-size:0.78rem;color:#475569;">
-        <div id="step-hearing" style="padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;">
-          ① ヒアリング
-        </div>
-        <div id="step-planning" style="padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;">
-          ② 間取り生成
-        </div>
-        <div id="step-legal" style="padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;">
-          ③ 法規チェック
-        <div id="step-maker" style="padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;">
-          ③ メーカー推薦
-        </div>
-        <div id="step-followup" style="padding:6px 8px;border-radius:6px;color:#94a3b8;">
-          ④ 送客
-        </div>
+  <aside class="right-panel" aria-label="進行状況と成果物">
+    <details class="card" id="flow-card" open>
+      <summary>フロー</summary>
+      <div class="card-body">
+        <ol class="flow-list" id="flow-indicator">
+          <li class="step is-active" id="step-hearing">① ヒアリング</li>
+          <li class="step is-idle" id="step-planning">② 間取り生成</li>
+          <li class="step is-idle" id="step-legal">③ 法規チェック</li>
+          <li class="step is-idle" id="step-maker">④ メーカー推薦</li>
+          <li class="step is-idle" id="step-followup">⑤ 送客</li>
+        </ol>
       </div>
-    </div>
+    </details>
 
-    <div class="card" id="artifact-card" style="display:none;">
+    <div class="card" id="artifact-card" hidden>
       <h2>成果物</h2>
-      <div style="font-size:0.76rem;color:#475569;line-height:1.6;margin-bottom:8px;">
-        要件・間取り・法規チェック結果をまとめた機械可読データ（JSON）です。
-      </div>
-      <a id="artifact-link" href="#" target="_blank" rel="noopener"
-         style="font-size:0.78rem;color:#2563a8;font-weight:600;">📄 アーティファクトを開く</a>
+      <p class="panel-note" style="margin-bottom:8px;">
+        要件・間取り・法規チェック結果・メーカー推薦をまとめた機械可読データ（JSON）です。
+      </p>
+      <a id="artifact-link" class="artifact-link" href="#" target="_blank" rel="noopener">📄 成果物データ（JSON）を開く</a>
+      <button class="retry-btn no-print" type="button" id="print-btn-panel">🖨 印刷 / PDF保存</button>
     </div>
 
-    <div class="card" id="phase2-card">
+    <div class="card no-print" id="phase2-card">
       <h2>Phase 2 予定</h2>
-      <div style="font-size:0.76rem;color:#94a3b8;line-height:1.7;">
-        ⑤ 概算見積AI<br>
-        ⑥ メーカー推薦AI<br>
-        ⑦ 来場予約連携
-        ④ 概算見積AI<br>
-        ⑤ 法規チェックAI<br>
-        ⑥ 来場予約連携
+      <div class="panel-note">
+        ⑥ 概算見積AI（坪単価ベース）<br>
+        ⑦ 来場予約連携（外部サイト）<br>
+        e-Gov 法令API による条文 RAG
       </div>
     </div>
   </aside>
@@ -665,11 +752,49 @@
 
 <script>
 // ─── 状態管理 ─────────────────────────────────────────────
-let sessionId = generateSessionId();
+const STORE_KEYS = { session: 'sumai.sessionId', transcript: 'sumai.transcript' };
+
+let sessionId = restoreSessionId();
 let isLoading = false;
+let isComposing = false;      // IME 変換中フラグ（isComposing 非対応ブラウザの保険）
+let lastUserMessage = '';     // エラー時の再試行用
+// 同じ成果物を毎ターン再描画しないための署名（follow_up 以降も同じ内容が返るため）
+const rendered = { plans: '', legal: '', maker: '', cta: false };
 
 function generateSessionId() {
   return 'session-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+function restoreSessionId() {
+  try {
+    const saved = sessionStorage.getItem(STORE_KEYS.session);
+    if (saved) return saved;
+  } catch (e) { /* プライベートモード等。生成にフォールバックする */ }
+  const id = generateSessionId();
+  try { sessionStorage.setItem(STORE_KEYS.session, id); } catch (e) {}
+  return id;
+}
+
+function persistSessionId(id) {
+  try { sessionStorage.setItem(STORE_KEYS.session, id); } catch (e) {}
+}
+
+// リロードしても会話が消えないよう、発話ログを sessionStorage に残す
+function loadTranscript() {
+  try { return JSON.parse(sessionStorage.getItem(STORE_KEYS.transcript) || '[]'); }
+  catch (e) { return []; }
+}
+function saveTranscript(list) {
+  try { sessionStorage.setItem(STORE_KEYS.transcript, JSON.stringify(list.slice(-40))); }
+  catch (e) {}
+}
+function pushTranscript(role, content) {
+  const list = loadTranscript();
+  list.push({ role, content });
+  saveTranscript(list);
+}
+function clearTranscript() {
+  try { sessionStorage.removeItem(STORE_KEYS.transcript); } catch (e) {}
 }
 
 // ─── API ─────────────────────────────────────────────────
@@ -689,48 +814,56 @@ async function sendMessage(message) {
 }
 
 async function loadPresets() {
+  const el = document.getElementById('preset-list');
   try {
     const res = await fetch(`${API_BASE}/demo-presets`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     renderPresets(data.presets || []);
   } catch (e) {
-    document.getElementById('preset-list').innerHTML =
-      '<p style="font-size:0.76rem;color:#ef4444;">取得失敗</p>';
+    // 復帰手段（再読み込み）を必ず用意する
+    el.innerHTML = '';
+    const msg = document.createElement('p');
+    msg.className = 'inline-error';
+    msg.textContent = `デモシナリオを取得できませんでした（${e.message}）。サーバーが起動しているか確認してください。`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'retry-btn';
+    btn.textContent = '↻ 再読み込み';
+    btn.addEventListener('click', loadPresets);
+    el.append(msg, btn);
   }
 }
 
 async function loadMakers() {
   try {
     const res = await fetch(`${API_BASE}/makers`);
+    if (!res.ok) return [];
     const data = await res.json();
     return data.makers || [];
-  } catch { return []; }
+  } catch (e) { return []; }
 }
 
-// ─── UI ユーティリティ ─────────────────────────────────────
-function renderPresets(presets) {
-  const el = document.getElementById('preset-list');
-  el.innerHTML = presets.map((p, i) =>
-    `<button class="preset-btn" data-index="${i}">
-      <span class="persona-name">${p.name}</span>
-      <span class="persona-desc">${p.description}</span>
-    </button>`
-  ).join('');
-  el.querySelectorAll('.preset-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.dataset.index);
-      const preset = presets[idx];
-      const input = document.getElementById('user-input');
-      input.value = preset.preset_message;
-      autoResize(input);
-      input.focus();
-    });
-  });
+// ─── エスケープ／URL 検証（描画層の共通防御） ───────────────
+function escHtml(str) {
+  // 属性値にも埋め込むため引用符もエスケープする
+  return String(str === null || str === undefined ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// Markdown 簡易レンダラー
+/**
+ * href に入れてよい URL だけを返す共通関数。
+ * javascript: / data: 等のスキームを弾く。使う側は必ずこれを通す。
+ */
+function safeUrl(url) {
+  const raw = String(url || '').trim();
+  return /^https?:\/\//i.test(raw) ? raw : null;
+}
+
+// Markdown 簡易レンダラー（先頭でエスケープしてからタグを起こす）
 function renderMarkdown(text) {
-  return text
+  return String(text || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
@@ -742,34 +875,94 @@ function renderMarkdown(text) {
     .replace(/\n/g, '<br>');
 }
 
+// ─── チャットへの差し込み ─────────────────────────────────
+function chatBox() { return document.getElementById('chat-messages'); }
+
+function scrollChatToBottom() {
+  const box = chatBox();
+  box.scrollTop = box.scrollHeight;
+}
+
 function appendMessage(role, content, isHtml = false) {
-  const container = document.getElementById('chat-messages');
+  const container = chatBox();
   const div = document.createElement('div');
   div.className = `message ${role === 'user' ? 'user' : 'ai'}`;
   const avatar = role === 'user' ? '👤' : '🏠';
   const text = isHtml ? content : renderMarkdown(content);
   div.innerHTML = `
-    <div class="avatar">${avatar}</div>
+    <div class="avatar" aria-hidden="true">${avatar}</div>
     <div class="bubble">${text}</div>
   `;
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  scrollChatToBottom();
   return div;
 }
 
+/** エラーはAIの発話と区別し、再試行の導線を付ける */
+function appendError(message, retryable) {
+  const container = chatBox();
+  const div = document.createElement('div');
+  div.className = 'message ai error';
+  div.setAttribute('role', 'alert');
+  div.innerHTML = `
+    <div class="avatar" aria-hidden="true">⚠️</div>
+    <div class="bubble">
+      <span class="err-head">システムエラー（AIの回答ではありません）</span>
+      <span class="err-body"></span>
+    </div>
+  `;
+  div.querySelector('.err-body').textContent = message;
+  if (retryable && lastUserMessage) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'retry-btn';
+    btn.style.marginTop = '8px';
+    btn.textContent = '↻ 同じ内容で再送信';
+    btn.addEventListener('click', () => {
+      div.remove();
+      handleSend(lastUserMessage);
+    });
+    div.querySelector('.bubble').appendChild(btn);
+  }
+  container.appendChild(div);
+  scrollChatToBottom();
+}
+
+/**
+ * 成果物（間取り・法規・推薦・送客）をチャットの時系列の中に差し込む。
+ * 入力欄の上に積み上げると会話から切り離され、入力欄が下へ押し出されるため。
+ */
+function appendBlock(id, innerHtml) {
+  const container = chatBox();
+  const prev = document.getElementById(id);
+  if (prev) prev.remove();
+  const block = document.createElement('div');
+  block.className = 'artifact-block';
+  block.id = id;
+  block.innerHTML = innerHtml;
+  container.appendChild(block);
+  // 結果領域は自動スクロールしない、という指摘への対応
+  block.scrollIntoView({ block: 'nearest' });
+  scrollChatToBottom();
+  return block;
+}
+
 function showTyping() {
-  const container = document.getElementById('chat-messages');
+  const container = chatBox();
   const div = document.createElement('div');
   div.className = 'message ai';
   div.id = 'typing-indicator';
   div.innerHTML = `
-    <div class="avatar">🏠</div>
+    <div class="avatar" aria-hidden="true">🏠</div>
     <div class="bubble">
-      <div class="typing"><span></span><span></span><span></span></div>
+      <div class="typing" role="status">
+        <span></span><span></span><span></span>
+        <span class="visually-hidden">回答を生成しています。しばらくお待ちください。</span>
+      </div>
     </div>
   `;
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  scrollChatToBottom();
 }
 
 function removeTyping() {
@@ -777,12 +970,39 @@ function removeTyping() {
   if (el) el.remove();
 }
 
+// ─── UI ユーティリティ ─────────────────────────────────────
+function renderPresets(presets) {
+  const el = document.getElementById('preset-list');
+  // p.name / p.description も必ずエスケープする（外部データを innerHTML に入れるため）
+  el.innerHTML = presets.map((p, i) =>
+    `<button class="preset-btn" type="button" data-index="${i}">
+      <span class="persona-name">${escHtml(p.name)}</span>
+      <span class="persona-desc">${escHtml(p.description)}</span>
+    </button>`
+  ).join('');
+  el.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = presets[parseInt(btn.dataset.index, 10)];
+      if (!preset) return;
+      const input = document.getElementById('user-input');
+      // 入力途中の文章を無警告で消さない
+      if (input.value.trim() &&
+          !window.confirm('入力中の内容をデモシナリオの文章で置き換えます。よろしいですか？')) {
+        return;
+      }
+      input.value = preset.preset_message;
+      autoResize(input);
+      input.focus();
+    });
+  });
+}
+
 function updateRequirementsPanel(req) {
   if (!req) return;
   const el = document.getElementById('requirements-panel');
   const badge = req.is_complete
-    ? `<span class="complete-badge">✅ ヒアリング完了</span>`
-    : `<span class="incomplete-badge">⏳ ヒアリング中</span>`;
+    ? '<span class="complete-badge">✅ ヒアリング完了</span>'
+    : '<span class="incomplete-badge">⏳ ヒアリング中</span>';
 
   const fields = [
     { label: '家族構成', key: 'family_structure' },
@@ -798,50 +1018,71 @@ function updateRequirementsPanel(req) {
   const rows = fields.map(f => {
     const val = req[f.key];
     return `<div class="req-item">
-      <span class="req-label">${f.label}</span>
-      <span class="${val ? 'req-value' : 'req-missing'}">${val || '未入力'}</span>
+      <span class="req-label">${escHtml(f.label)}</span>
+      <span class="${val ? 'req-value' : 'req-missing'}">${val ? escHtml(val) : '未入力'}</span>
     </div>`;
   }).join('');
 
   el.innerHTML = badge + rows;
 }
 
+// ─── 間取り案の表示 ───────────────────────────────────────
 function renderPlans(plans) {
   if (!plans || plans.length === 0) return;
-  const container = document.getElementById('plans-container');
-  container.classList.remove('hidden');
-
   const hasGeometry = plans.some(p => p.geometry);
 
   const html = `
-    <div class="card" style="padding:14px;">
-      <h2 style="font-size:0.82rem;font-weight:700;color:#1a4a7a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e8f0fa;">
-        ✨ 間取り提案 ${plans.length}案
-      </h2>
-      ${hasGeometry ? `<a class="artifact-link" href="${API_BASE}/artifact/${sessionId}/download" target="_blank" rel="noopener">📄 アーティファクト(JSON)をダウンロード</a>` : ''}
+    <div class="card">
+      <h2 class="block-title">✨ 間取り提案 ${plans.length}案ができました</h2>
       <div class="plans-grid">
         ${plans.map((plan, i) => `
           <div class="plan-card">
-            <span class="plan-concept">案${i+1}：${escHtml(plan.concept)}</span>
+            <span class="plan-concept">案${i + 1}：${escHtml(plan.concept)}</span>
             <div class="plan-area">📐 ${escHtml(plan.total_floor_area)} · ${escHtml(plan.floors)}</div>
             ${plan.estimated_cost ? `<div class="plan-cost">💴 ${escHtml(plan.estimated_cost)}</div>` : ''}
             <ul class="room-list">
-              ${plan.rooms.slice(0, 6).map(r =>
-                `<li>${escHtml(r.name)}（${escHtml(r.area)}）${r.note ? ' <span style="color:#94a3b8;font-size:.72rem">— '+escHtml(r.note)+'</span>' : ''}</li>`
+              ${(plan.rooms || []).slice(0, 6).map(r =>
+                `<li>${escHtml(r.name)}（${escHtml(r.area)}）${r.note ? ' <span class="room-note">— ' + escHtml(r.note) + '</span>' : ''}</li>`
               ).join('')}
-              ${plan.rooms.length > 6 ? `<li style="color:#94a3b8">他${plan.rooms.length-6}室…</li>` : ''}
+              ${(plan.rooms || []).length > 6 ? `<li class="room-more">他${plan.rooms.length - 6}室…</li>` : ''}
             </ul>
             <div class="plan-note">${escHtml(plan.rationale)}</div>
             ${plan.geometry ? renderFloorPlanBlock(plan, i) : ''}
           </div>
         `).join('')}
       </div>
+      ${hasGeometry ? '<p class="panel-note" style="margin-top:8px;">間取り図は各案のタブ（1F／2F）で切り替えられます。</p>' : ''}
     </div>
   `;
-  container.innerHTML = html;
+  const block = appendBlock('plans-block', html);
+
+  // タブは data-floor 属性＋addEventListener で結線する（表示文字列での照合はしない）
+  block.querySelectorAll('.floorplan-tabs').forEach(tabs => {
+    const planIndex = Number(tabs.dataset.plan);
+    const buttons = Array.from(tabs.querySelectorAll('.floorplan-tab'));
+    buttons.forEach((btn, i) => {
+      btn.addEventListener('click', () => showFloorPlan(planIndex, Number(btn.dataset.floor)));
+      // ← → での移動（role="tablist" としての最低限のキーボード操作）
+      btn.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        e.preventDefault();
+        const next = buttons[(i + (e.key === 'ArrowRight' ? 1 : buttons.length - 1)) % buttons.length];
+        next.focus();
+        showFloorPlan(planIndex, Number(next.dataset.floor));
+      });
+    });
+  });
+
+  block.querySelectorAll('.floorplan-img').forEach(img => {
+    img.addEventListener('error', () => {
+      img.hidden = true;
+      const note = img.parentElement.querySelector('.floorplan-error');
+      if (note) note.hidden = false;
+    });
+  });
 
   plans.forEach((plan, i) => {
-    if (plan.geometry && plan.geometry.floors.length > 0) {
+    if (plan.geometry && plan.geometry.floors && plan.geometry.floors.length > 0) {
       showFloorPlan(i, plan.geometry.floors[0].floor);
     }
   });
@@ -850,32 +1091,35 @@ function renderPlans(plans) {
 function renderFloorPlanBlock(plan, planIndex) {
   const floors = plan.geometry.floors.map(f => f.floor);
   return `
-    <div class="floorplan-tabs" id="floorplan-tabs-${planIndex}">
-      ${floors.map(f => `<button class="floorplan-tab" onclick="showFloorPlan(${planIndex}, ${f})">${f}F</button>`).join('')}
+    <div class="floorplan-tabs" role="tablist" aria-label="案${planIndex + 1}の階の切り替え"
+         id="floorplan-tabs-${planIndex}" data-plan="${planIndex}">
+      ${floors.map(f => `<button class="floorplan-tab" type="button" role="tab"
+          aria-selected="false" aria-controls="floorplan-img-${planIndex}"
+          data-floor="${escHtml(f)}">${escHtml(f)}F</button>`).join('')}
     </div>
     <div class="floorplan-img-wrap">
-      <img class="floorplan-img" id="floorplan-img-${planIndex}" alt="間取り図（案${planIndex+1}）" />
+      <img class="floorplan-img" id="floorplan-img-${planIndex}"
+           alt="間取り図（案${planIndex + 1}）" />
+      <p class="floorplan-error" hidden>間取り図を読み込めませんでした（サーバー再起動でセッションが失われた可能性があります）。</p>
     </div>
   `;
 }
 
 function showFloorPlan(planIndex, floor) {
   const img = document.getElementById(`floorplan-img-${planIndex}`);
-  if (img) img.src = `${API_BASE}/plan-svg/${sessionId}/${planIndex}/${floor}`;
-
+  if (img) {
+    img.hidden = false;
+    img.alt = `間取り図（案${planIndex + 1}・${floor}F）`;
+    img.src = `${API_BASE}/plan-svg/${encodeURIComponent(sessionId)}/${planIndex}/${floor}`;
+  }
   const tabsWrap = document.getElementById(`floorplan-tabs-${planIndex}`);
   if (tabsWrap) {
     tabsWrap.querySelectorAll('.floorplan-tab').forEach(btn => {
-      btn.classList.toggle('active', btn.textContent === `${floor}F`);
+      const selected = Number(btn.dataset.floor) === Number(floor);
+      btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+      btn.tabIndex = selected ? 0 : -1;
     });
   }
-}
-
-function escHtml(str) {
-  // 属性値にも埋め込むため引用符もエスケープする
-  return String(str || '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ─── 法規チェック結果の表示 ─────────────────────────
@@ -884,6 +1128,8 @@ const LEGAL_STATUS_LABEL = {
   ng: '⚠️ 不適合の可能性',
   unknown: '❓ 判定材料不足',
 };
+// 色（絵文字）だけでなくテキストでも重要度が分かるようにする
+const SEVERITY_LABEL = { high: '高', medium: '中', low: '低' };
 const SEVERITY_MARK = { high: '🔴', medium: '🟡', low: '⚪' };
 const SITE_SOURCE_LABEL = {
   user_input: 'ご入力内容',
@@ -892,17 +1138,24 @@ const SITE_SOURCE_LABEL = {
   assumed: '標準的な敷地条件の仮定値',
 };
 
+function severityTag(severity) {
+  const label = SEVERITY_LABEL[severity] || '—';
+  const mark = SEVERITY_MARK[severity] || '・';
+  const cls = SEVERITY_LABEL[severity] ? severity : 'low';
+  return `<span class="severity ${cls}" aria-label="重要度 ${label}">${mark} 重要度${label}</span>`;
+}
+
 function renderSiteInfo(site) {
   if (!site) return '';
   const fmt = (v, unit) => (v === null || v === undefined ? '未確認' : `${v}${unit || ''}`);
   const tsubo = site.site_area_sqm ? `（約${(site.site_area_sqm / 3.305785).toFixed(1)}坪）` : '';
   const rows = [
     ['所在地', escHtml(site.address || '未確定')],
-    ['敷地面積', site.site_area_sqm ? `${site.site_area_sqm}㎡${tsubo}` : '未確定'],
+    ['敷地面積', site.site_area_sqm ? `${escHtml(site.site_area_sqm)}㎡${tsubo}` : '未確定'],
     ['用途地域', escHtml(site.zoning || '未確認')],
-    ['指定建ぺい率', fmt(site.building_coverage_ratio, '%')],
-    ['指定容積率', fmt(site.floor_area_ratio, '%')],
-    ['前面道路幅員', fmt(site.road_width_m, 'm')],
+    ['指定建ぺい率', escHtml(fmt(site.building_coverage_ratio, '%'))],
+    ['指定容積率', escHtml(fmt(site.floor_area_ratio, '%'))],
+    ['前面道路幅員', escHtml(fmt(site.road_width_m, 'm'))],
     ['防火地域', escHtml(site.fire_zone || '未確認')],
   ];
   const cells = rows.map(([label, value]) =>
@@ -918,46 +1171,7 @@ function renderSiteInfo(site) {
 }
 
 function renderLegal(site, checks) {
-  const container = document.getElementById('legal-container');
-  if (!checks || checks.length === 0) {
-    container.classList.add('hidden');
-    container.innerHTML = '';
-    return;
-function updateFlowStep(stage) {
-  const S_ACTIVE  = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;margin-bottom:4px;';
-  const S_DONE    = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;margin-bottom:4px;';
-  const S_INACTIVE = 'padding:6px 8px;border-radius:6px;color:#94a3b8;margin-bottom:4px;';
-  const S_ACTIVE_LAST  = 'padding:6px 8px;border-radius:6px;background:#e8f0fa;color:#1a4a7a;font-weight:700;';
-  const S_DONE_LAST    = 'padding:6px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:700;';
-  const S_INACTIVE_LAST = 'padding:6px 8px;border-radius:6px;color:#94a3b8;';
-
-  const hearing  = document.getElementById('step-hearing');
-  const planning = document.getElementById('step-planning');
-  const maker    = document.getElementById('step-maker');
-  const followup = document.getElementById('step-followup');
-
-  if (stage === 'hearing') {
-    hearing.style.cssText  = S_ACTIVE;
-    planning.style.cssText = S_INACTIVE;
-    maker.style.cssText    = S_INACTIVE;
-    followup.style.cssText = S_INACTIVE_LAST;
-  } else if (stage === 'planning') {
-    hearing.style.cssText  = S_DONE;
-    planning.style.cssText = S_ACTIVE;
-    maker.style.cssText    = S_INACTIVE;
-    followup.style.cssText = S_INACTIVE_LAST;
-  } else if (stage === 'maker') {
-    hearing.style.cssText  = S_DONE;
-    planning.style.cssText = S_DONE;
-    maker.style.cssText    = S_ACTIVE;
-    followup.style.cssText = S_INACTIVE_LAST;
-  } else if (stage === 'follow_up') {
-    hearing.style.cssText  = S_DONE;
-    planning.style.cssText = S_DONE;
-    maker.style.cssText    = S_DONE;
-    followup.style.cssText = S_ACTIVE_LAST;
-  }
-  container.classList.remove('hidden');
+  if (!checks || checks.length === 0) return;
 
   // 全案に共通する要確認フラグ（＝敷地に対する制限）の項目名を求める。
   // 案ごとに固有のフラグ（間取りデータの矛盾など）はその案の中に表示する。
@@ -967,7 +1181,7 @@ function updateFlowStep(stage) {
   }, null) || new Set();
 
   const plansHtml = checks.map(check => {
-    const itemsHtml = check.items.map(item => {
+    const itemsHtml = (check.items || []).map(item => {
       const mark = { ok: '✅', ng: '⚠️', unknown: '❓' }[item.status] || '・';
       return `<tr>
         <td>${mark} ${escHtml(item.item)}</td>
@@ -981,21 +1195,23 @@ function updateFlowStep(stage) {
     const ownFlags = (check.manual_flags || []).filter(f => !sharedItems.has(f.item));
     const ownFlagsHtml = ownFlags.length ? `
       <ul class="flag-list" style="margin-top:6px;">
-        ${ownFlags.map(f => `<li>${SEVERITY_MARK[f.severity] || '・'}
+        ${ownFlags.map(f => `<li>${severityTag(f.severity)}
           <span class="flag-item-name">${escHtml(f.item)}</span> — ${escHtml(f.reason)}</li>`).join('')}
       </ul>` : '';
 
     return `<div class="legal-plan status-${escHtml(check.status)}">
       <div class="legal-plan-head">
-        案${check.plan_index}：${escHtml(check.plan_concept)}
-        <span class="legal-status-badge">${LEGAL_STATUS_LABEL[check.status] || check.status}</span>
+        案${escHtml(check.plan_index)}：${escHtml(check.plan_concept)}
+        <span class="legal-status-badge">${escHtml(LEGAL_STATUS_LABEL[check.status] || check.status)}</span>
       </div>
-      <table class="legal-items">
-        <thead><tr><th>項目</th><th>判定値</th><th>上限</th><th>余裕／超過</th><th>根拠</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-      </table>
+      <div class="tablewrap">
+        <table class="legal-items">
+          <thead><tr><th>項目</th><th>判定値</th><th>上限</th><th>余裕／超過</th><th>根拠</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+      </div>
       ${ownFlagsHtml}
-      <div style="font-size:0.76rem;color:#64748b;margin-top:6px;">${escHtml(check.summary)}</div>
+      <div class="legal-summary">${escHtml(check.summary)}</div>
     </div>`;
   }).join('');
 
@@ -1004,16 +1220,14 @@ function updateFlowStep(stage) {
   const flagsHtml = flags.length ? `
     <div class="legal-subhead">要確認項目（専門家の確認が必要／自動判定の対象外）</div>
     <ul class="flag-list">
-      ${flags.map(f => `<li>${SEVERITY_MARK[f.severity] || '・'}
+      ${flags.map(f => `<li>${severityTag(f.severity)}
         <span class="flag-item-name">${escHtml(f.item)}</span> — ${escHtml(f.reason)}
         <span class="flag-basis">〔${escHtml(f.basis)}〕</span></li>`).join('')}
     </ul>` : '';
 
-  container.innerHTML = `
-    <div class="card" style="padding:14px;">
-      <h2 style="font-size:0.82rem;font-weight:700;color:#1a4a7a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e8f0fa;">
-        ⚖️ 法規チェック結果（参考判定）
-      </h2>
+  appendBlock('legal-block', `
+    <div class="card">
+      <h2 class="block-title">⚖️ 法規チェック結果（参考判定）が出ました</h2>
       <div class="legal-subhead" style="margin-top:0;">判定に用いた敷地条件</div>
       ${renderSiteInfo(site)}
       <div class="legal-subhead">自動判定（建ぺい率・容積率・高さ）</div>
@@ -1024,33 +1238,111 @@ function updateFlowStep(stage) {
         斜線制限・日影規制・自治体条例・防火地域の仕様規制は自動判定の対象外です。
         設計・着工前に必ず建築士または指定確認検査機関にご確認ください。
       </div>
-    </div>`;
+    </div>`);
+}
+
+// ─── メーカー推薦の表示 ───────────────────────────────────
+function renderMakerRecommendations(recs) {
+  if (!recs || recs.length === 0) return;
+
+  const cards = recs.map(rec => {
+    const isPortal = rec.type === 'portal';
+    const typeLabel = isPortal ? '情報ポータル' : '注文住宅メーカー';
+    const strengthsHtml = (rec.strengths || []).slice(0, 3).map(s =>
+      `<span class="maker-strength-chip">${escHtml(s)}</span>`
+    ).join('');
+    const cautionHtml = rec.caution
+      ? `<div class="maker-rec-caution">⚠️ ${escHtml(rec.caution)}</div>`
+      : '';
+    // href は共通の safeUrl() を通す（renderMakerRecommendations と showCtaBanner で防御を揃える）
+    const url = safeUrl(rec.website);
+    const linkHtml = url
+      ? `<a class="maker-rec-link" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer">🔗 ${escHtml(rec.name)}の公式サイトを見る（別タブ）</a>`
+      : '';
+    return `
+      <div class="maker-rec-card${isPortal ? ' portal' : ''}">
+        <div class="maker-rec-head">
+          <span class="maker-rank-badge">第${escHtml(rec.rank)}位</span>
+          <span class="maker-type-label">${escHtml(typeLabel)}</span>
+        </div>
+        <div class="maker-rec-name">${escHtml(rec.name)}</div>
+        <div class="maker-rec-reason">${escHtml(rec.reason)}</div>
+        <div class="maker-rec-price">💴 ${escHtml(rec.price_band)}</div>
+        <div class="maker-rec-strengths">${strengthsHtml}</div>
+        ${cautionHtml}
+        ${linkHtml}
+      </div>
+    `;
+  }).join('');
+
+  appendBlock('maker-block', `
+    <div class="card">
+      <h2 class="block-title">🏢 おすすめハウスメーカー・サービス</h2>
+      <div class="maker-rec-grid">${cards}</div>
+    </div>
+  `);
+}
+
+// ─── 送客バナー ───────────────────────────────────────────
+async function showCtaBanner(makerRecs) {
+  // 推薦済みメーカーがあればそれを使い、無ければAPIから全件取得する
+  let makers = (makerRecs && makerRecs.length) ? makerRecs : await loadMakers();
+
+  // 得意分野・価格帯は推薦カードに表示済みなので、バナーは行動導線（リンク）に絞る。
+  // （title 属性だけの情報提供はタッチ端末・キーボードで読めないため）
+  const chips = makers.map(m => {
+    const url = safeUrl(m.website);
+    if (!url) return `<span class="maker-chip">${escHtml(m.name)}</span>`;
+    return `<a class="maker-chip" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer">`
+         + `${escHtml(m.name)} ↗<span class="visually-hidden">（公式サイトを別タブで開く）</span></a>`;
+  }).join('');
+
+  const artifactUrl = `${API_BASE}/artifact/${encodeURIComponent(sessionId)}`;
+  const block = appendBlock('cta-block', `
+    <div class="cta-banner">
+      <h3>📋 ハウスメーカーへの相談・来場予約</h3>
+      <p>ご提案した間取り案・推薦メーカーを持参すれば、商談がスムーズになります。
+         メーカー名を押すと公式サイトが別タブで開きます。</p>
+      <div class="maker-chips">${chips}</div>
+      <div class="cta-actions">
+        <button class="cta-action no-print" type="button" id="print-btn-cta">🖨 印刷 / PDFで持ち出す</button>
+        <a class="cta-action" href="${escHtml(artifactUrl)}" target="_blank" rel="noopener">📄 成果物データ（JSON）を開く</a>
+      </div>
+    </div>
+  `);
+  const printBtn = block.querySelector('#print-btn-cta');
+  if (printBtn) printBtn.addEventListener('click', () => window.print());
 }
 
 // ─── フロー表示 ───────────────────────────────────
-const FLOW_STEPS = ['step-hearing', 'step-planning', 'step-legal', 'step-followup'];
-const STEP_BASE = 'padding:6px 8px;border-radius:6px;';
-const STEP_DONE = STEP_BASE + 'background:#dcfce7;color:#166534;font-weight:700;';
-const STEP_ACTIVE = STEP_BASE + 'background:#e8f0fa;color:#1a4a7a;font-weight:700;';
-const STEP_IDLE = STEP_BASE + 'color:#94a3b8;';
+const FLOW_STEPS = ['step-hearing', 'step-planning', 'step-legal', 'step-maker', 'step-followup'];
+const STAGE_INDEX = { hearing: 0, planning: 1, legal: 2, maker: 3, follow_up: 4 };
 
 /**
  * フロー表示を更新する。
  * activeIndex より前を完了、activeIndex を進行中、それ以降を未着手として描画する。
  */
 function updateFlowStep(stage, hasLegal) {
-  let activeIndex = 0;
-  if (stage === 'planning') activeIndex = 1;
-  else if (stage === 'legal') activeIndex = 2;
-  else if (stage === 'follow_up') activeIndex = 3;
+  const activeIndex = STAGE_INDEX[stage] !== undefined ? STAGE_INDEX[stage] : 0;
+  const last = FLOW_STEPS.length - 1;
 
-  // 法規チェック結果が未取得のまま送客段階に進んだ場合（法規ステップ無効時）は③を飛ばす
   FLOW_STEPS.forEach((id, index) => {
     const el = document.getElementById(id);
     if (!el) return;
-    let style = index < activeIndex ? STEP_DONE : index === activeIndex ? STEP_ACTIVE : STEP_IDLE;
-    if (id === 'step-legal' && activeIndex === 3 && !hasLegal) style = STEP_IDLE;
-    el.style.cssText = style + (index < FLOW_STEPS.length - 1 ? 'margin-bottom:4px;' : '');
+    let state = index < activeIndex ? 'is-done' : (index === activeIndex ? 'is-active' : 'is-idle');
+    // 法規チェック結果が無いまま送客段階に進んだ場合（法規ステップ無効時）は③を未着手のままにする
+    if (id === 'step-legal' && activeIndex === last && !hasLegal) state = 'is-idle';
+    el.classList.remove('is-done', 'is-active', 'is-idle');
+    el.classList.add(state);
+
+    const label = { 'is-done': '（完了）', 'is-active': '（進行中）', 'is-idle': '（未着手）' }[state];
+    let note = el.querySelector('.step-state');
+    if (!note) {
+      note = document.createElement('span');
+      note.className = 'step-state';
+      el.appendChild(note);
+    }
+    note.textContent = ' ' + label;
   });
 }
 
@@ -1058,83 +1350,38 @@ function showArtifactLink() {
   const card = document.getElementById('artifact-card');
   const link = document.getElementById('artifact-link');
   link.href = `${API_BASE}/artifact/${encodeURIComponent(sessionId)}`;
-  card.style.display = '';
-}
-
-function renderMakerRecommendations(recs) {
-  if (!recs || recs.length === 0) return;
-  const container = document.getElementById('maker-rec-container');
-  container.classList.remove('hidden');
-
-  const cards = recs.map(rec => {
-    const isPortal = rec.type === 'portal';
-    const typeLabel = isPortal ? '情報ポータル' : '注文住宅メーカー';
-    const strengthsHtml = rec.strengths.slice(0, 3).map(s =>
-      `<span style="display:inline-block;background:#f1f5f9;border-radius:3px;padding:1px 5px;margin:1px 2px 1px 0;font-size:0.71rem;color:#475569;">${escHtml(s)}</span>`
-    ).join('');
-    const cautionHtml = rec.caution
-      ? `<div class="maker-rec-caution">⚠️ ${escHtml(rec.caution)}</div>`
-      : '';
-    return `
-      <div class="maker-rec-card${isPortal ? ' portal' : ''}">
-        <span class="maker-rank-badge">第${rec.rank}位</span>
-        <div class="maker-type-label">${escHtml(typeLabel)}</div>
-        <div class="maker-rec-name">${escHtml(rec.name)}</div>
-        <div class="maker-rec-reason">${escHtml(rec.reason)}</div>
-        <div class="maker-rec-price">💴 ${escHtml(rec.price_band)}</div>
-        <div class="maker-rec-strengths">${strengthsHtml}</div>
-        ${cautionHtml}
-        <a class="maker-rec-link" href="${escHtml(rec.website)}" target="_blank" rel="noopener">🔗 公式サイトを見る</a>
-      </div>
-    `;
-  }).join('');
-
-  container.innerHTML = `
-    <div class="card" style="padding:14px;">
-      <h2 style="font-size:0.82rem;font-weight:700;color:#1a4a7a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #e8f0fa;">
-        🏢 おすすめハウスメーカー・サービス
-      </h2>
-      <div class="maker-rec-grid">${cards}</div>
-    </div>
-  `;
-}
-
-async function showCtaBanner(makerRecs) {
-  const banner = document.getElementById('cta-banner');
-  const chips = document.getElementById('maker-chips');
-  chips.innerHTML = makers.map(m => {
-    // 得意分野と価格帯をツールチップに出し、押したら公式サイトを別タブで開く。
-    // href は http(s) のみ許可する（javascript: 等を弾く）
-    const tip = [m.price_band, (m.strengths || []).join(' / ')].filter(Boolean).join('｜');
-    const url = /^https?:\/\//.test(m.website || '') ? m.website : null;
-    if (!url) return `<span class="maker-chip" title="${escHtml(tip)}">${escHtml(m.name)}</span>`;
-    return `<a class="maker-chip" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer"`
-         + ` title="${escHtml(tip)}｜公式サイトを開く">${escHtml(m.name)} ↗</a>`;
-  }).join('');
-  // 推薦済みメーカーがあればそれを使う、なければAPIから全件取得
-  let makers = makerRecs || [];
-  if (makers.length === 0) {
-    const all = await loadMakers();
-    makers = all;
-  }
-  chips.innerHTML = makers.map(m =>
-    `<a class="maker-chip" href="${escHtml(m.website || '#')}" target="_blank" rel="noopener" title="${escHtml(m.price_band)}">${escHtml(m.name)}</a>`
-  ).join('');
-  banner.classList.remove('hidden');
+  card.hidden = false;
 }
 
 // ─── 送信処理 ─────────────────────────────────────────────
-async function handleSend() {
+function setLoading(loading) {
+  isLoading = loading;
+  const btn = document.getElementById('send-btn');
   const input = document.getElementById('user-input');
-  const message = input.value.trim();
+  btn.disabled = loading;
+  btn.setAttribute('aria-busy', loading ? 'true' : 'false');
+  btn.textContent = loading ? '送信中…' : '送信 ▶';
+  // 送信中に入力しても何も起きず「壊れている」ように見えるため、状態を明示する
+  input.disabled = loading;
+  input.placeholder = loading
+    ? 'AIが回答を生成しています…（完了までお待ちください）'
+    : 'ご要望をご自由にお話しください…（Shift+Enterで改行、Enterで送信）';
+}
+
+async function handleSend(retryMessage) {
+  const input = document.getElementById('user-input');
+  const message = retryMessage !== undefined ? retryMessage : input.value.trim();
   if (!message || isLoading) return;
 
-  input.value = '';
-  autoResize(input);
-  isLoading = true;
-  document.getElementById('send-btn').disabled = true;
+  if (retryMessage === undefined) {
+    input.value = '';
+    autoResize(input);
+  }
+  lastUserMessage = message;
+  setLoading(true);
 
   appendMessage('user', message);
+  pushTranscript('user', message);
   showTyping();
 
   try {
@@ -1143,27 +1390,37 @@ async function handleSend() {
 
     if (data.reply) {
       appendMessage('ai', data.reply);
+      pushTranscript('ai', data.reply);
     }
     if (data.requirements) {
       updateRequirementsPanel(data.requirements);
     }
-    if (data.floor_plans && data.floor_plans.length > 0) {
-      renderPlans(data.floor_plans);
+
+    // 完了後も同じ成果物が毎ターン返るため、内容が変わったときだけ描画し直す
+    const plans = data.floor_plans || [];
+    if (plans.length) {
+      const key = JSON.stringify(plans);
+      if (key !== rendered.plans) { rendered.plans = key; renderPlans(plans); }
     }
-    const hasLegal = !!(data.legal_checks && data.legal_checks.length > 0);
+
+    const legalChecks = data.legal_checks || [];
+    const hasLegal = legalChecks.length > 0;
     if (hasLegal) {
-      renderLegal(data.site_info, data.legal_checks);
+      const key = JSON.stringify([data.site_info, legalChecks]);
+      if (key !== rendered.legal) { rendered.legal = key; renderLegal(data.site_info, legalChecks); }
     }
+
+    // API のフィールド名は maker_recommendation（単数）。旧名も一応受ける
+    const makerRecs = data.maker_recommendation || data.maker_recommendations || [];
+    if (makerRecs.length) {
+      const key = JSON.stringify(makerRecs);
+      if (key !== rendered.maker) { rendered.maker = key; renderMakerRecommendations(makerRecs); }
+    }
+
     if (data.done) {
       updateFlowStep('follow_up', hasLegal);
-      showCtaBanner();
       showArtifactLink();
-    if (data.maker_recommendations && data.maker_recommendations.length > 0) {
-      renderMakerRecommendations(data.maker_recommendations);
-    }
-    if (data.done) {
-      updateFlowStep('follow_up');
-      showCtaBanner(data.maker_recommendations);
+      if (!rendered.cta) { rendered.cta = true; await showCtaBanner(makerRecs); }
     } else {
       updateFlowStep(data.stage || 'hearing', hasLegal);
     }
@@ -1172,11 +1429,12 @@ async function handleSend() {
     // サーバー側が対処方法まで示している場合（末尾が「〜してください」）は、
     // 再試行を促す定型文を足さない（Ollama 停止時は待っても解決しないため）
     const actionable = /ください。?$/.test(e.message || '');
-    appendMessage('ai', `⚠️ エラーが発生しました: ${e.message}`
-      + (actionable ? '' : '\n\nしばらく待ってから再試行してください。'));
+    appendError(
+      `${e.message}${actionable ? '' : '\n\nしばらく待ってから再試行してください。'}`,
+      true
+    );
   } finally {
-    isLoading = false;
-    document.getElementById('send-btn').disabled = false;
+    setLoading(false);
     input.focus();
   }
 }
@@ -1184,43 +1442,82 @@ async function handleSend() {
 // ─── テキストエリア自動リサイズ ──────────────────────────────
 function autoResize(el) {
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
 }
 
 // ─── イベントリスナー ────────────────────────────────────────
-document.getElementById('send-btn').addEventListener('click', handleSend);
-document.getElementById('user-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+const inputEl = document.getElementById('user-input');
+
+document.getElementById('input-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  handleSend();
+});
+
+inputEl.addEventListener('compositionstart', () => { isComposing = true; });
+inputEl.addEventListener('compositionend', () => { isComposing = false; });
+inputEl.addEventListener('keydown', (e) => {
+  // 【重要】日本語入力の変換確定 Enter を送信にしない。
+  // 誤送信はキャッシュ外れ＝実機推論での数十分待ちに直結する（README / ガイド05章）
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !isComposing && e.keyCode !== 229) {
     e.preventDefault();
     handleSend();
   }
 });
-document.getElementById('user-input').addEventListener('input', (e) => autoResize(e.target));
+inputEl.addEventListener('input', (e) => autoResize(e.target));
+
+document.getElementById('print-btn-panel').addEventListener('click', () => window.print());
 
 document.getElementById('new-session-btn').addEventListener('click', () => {
+  // 取り消せない破壊的操作なので確認を挟む
+  if (!window.confirm('現在の会話・間取り案・法規チェック結果をすべて消去して、新しいセッションを開始します。よろしいですか？')) {
+    return;
+  }
   sessionId = generateSessionId();
-  document.getElementById('chat-messages').innerHTML = `
+  persistSessionId(sessionId);
+  clearTranscript();
+  rendered.plans = ''; rendered.legal = ''; rendered.maker = ''; rendered.cta = false;
+
+  chatBox().innerHTML = `
     <div class="message ai">
-      <div class="avatar">🏠</div>
+      <div class="avatar" aria-hidden="true">🏠</div>
       <div class="bubble">
         <strong>新しいセッションを開始しました。</strong><br><br>
         ご要望をお気軽にお話しください。
       </div>
     </div>
   `;
-  document.getElementById('requirements-panel').innerHTML = '<p style="font-size:0.78rem;color:#94a3b8;">ヒアリング前</p>';
-  document.getElementById('plans-container').classList.add('hidden');
-  document.getElementById('plans-container').innerHTML = '';
-  document.getElementById('legal-container').classList.add('hidden');
-  document.getElementById('legal-container').innerHTML = '';
-  document.getElementById('maker-rec-container').classList.add('hidden');
-  document.getElementById('maker-rec-container').innerHTML = '';
-  document.getElementById('cta-banner').classList.add('hidden');
-  document.getElementById('artifact-card').style.display = 'none';
+  document.getElementById('requirements-panel').innerHTML = '<p class="panel-note">ヒアリング前</p>';
+  document.getElementById('artifact-card').hidden = true;
   updateFlowStep('hearing', false);
 });
 
+// 印刷時は折りたたみカードを開いておく（閉じたままだと中身が出力されない）
+let reopenedDetails = [];
+window.addEventListener('beforeprint', () => {
+  reopenedDetails = Array.from(document.querySelectorAll('details.card:not([open])'));
+  reopenedDetails.forEach(d => { d.open = true; });
+});
+window.addEventListener('afterprint', () => {
+  reopenedDetails.forEach(d => { d.open = false; });
+  reopenedDetails = [];
+});
+
 // ─── 初期化 ─────────────────────────────────────────────────
+function restoreConversation() {
+  const list = loadTranscript();
+  if (!list.length) return;
+  list.forEach(m => appendMessage(m.role === 'user' ? 'user' : 'ai', m.content));
+  const note = document.createElement('p');
+  note.className = 'panel-note';
+  note.style.textAlign = 'center';
+  note.textContent = 'ここまでは前回の続きです（リロード前の会話を復元しました）。'
+    + '間取り案・法規チェック結果の表示はリロードで消えますが、続けて会話すれば再表示されます。';
+  chatBox().appendChild(note);
+  scrollChatToBottom();
+}
+
+updateFlowStep('hearing', false);
+restoreConversation();
 loadPresets();
 </script>
 </body>
