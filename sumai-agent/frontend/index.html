@@ -106,6 +106,9 @@
 
   /* ─── リセット & ベース ─── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  /* bodyだけに背景色を付けていると、スマホ等のオーバースクロール（バウンス）時に
+     デフォルトの白（htmlの背景）が見えてしまう。htmlにも同じ背景を付けて防ぐ */
+  html { background: var(--paper); }
   body {
     font-family: var(--font-body);
     font-size: var(--fs-body);
@@ -217,6 +220,26 @@
   details.card[open] > summary::after { content: "▴"; }
   details.card > .card-body { padding-top: 10px; }
 
+  /* 各案の間取り図（SVG）は縦に大きく場所を取るため、折りたたみ式にして
+     一覧性を優先する（既定では案1だけ開いた状態）。折りたたみ挙動は
+     details.card と揃える */
+  .floorplan-details { margin-top: 8px; }
+  .floorplan-details > summary {
+    list-style: none;
+    cursor: pointer;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--brand-text);
+    padding: 8px 0;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .floorplan-details > summary::-webkit-details-marker { display: none; }
+  .floorplan-details > summary::before { content: "▸"; color: var(--ink-3); }
+  .floorplan-details[open] > summary::before { content: "▾"; }
+
   /* ─── ペルソナボタン ─── */
   .preset-btn {
     display: block;
@@ -280,6 +303,12 @@
     flex-direction: column;
     gap: 14px;
     scroll-behavior: smooth;
+    /* 会話が長くなる（間取り図・法規チェック表など）と、overflow-y:auto で
+       内部スクロールしているはずのこの中身の実サイズが、なぜかページ全体
+       （html要素）のscrollHeightにまで伝播し、下に大量の空白ができる現象が
+       あった。containで内部のレイアウト・描画をこの要素の外に影響させない
+       ようにすることで、ページ全体の高さを実際の見た目通りに保つ */
+    contain: layout paint;
   }
 
   /* ─── メッセージバブル ─── */
@@ -367,9 +396,28 @@
   }
   .floorplan-tab[aria-selected="true"] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 700; }
   .floorplan-img-wrap { margin-top: 6px; border: 1px solid var(--rule); border-radius: 8px; overflow: auto; background: #fff; }
+  .floorplan-zoom-btn { display: block; width: 100%; padding: 0; border: none; background: none; cursor: zoom-in; }
+  .floorplan-zoom-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   /* 読み込み前に領域を確保してレイアウトシフト（CLS）を防ぐ */
   .floorplan-img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; }
   .floorplan-error { font-size: var(--fs-xs); color: var(--warn); padding: 8px 10px; }
+  .floorplan-hint { font-size: var(--fs-xs); color: var(--ink-3); margin: 4px 0 0; }
+
+  /* ─── 間取り図の拡大表示（ライトボックス） ─── */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(10, 20, 30, 0.82);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .lightbox img { max-width: 96vw; max-height: 90vh; background: #fff; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+  .lightbox-close {
+    position: absolute; top: 16px; right: 16px;
+    min-width: 44px; min-height: 44px;
+    background: #fff; color: var(--ink); border: none; border-radius: 50%;
+    font-size: 18px; font-weight: 700; cursor: pointer;
+  }
+  .lightbox-close:hover { background: var(--brand-soft); }
 
   /* ─── 入力欄 ─── */
   .input-area { display: flex; gap: 8px; margin-top: 10px; align-items: flex-end; }
@@ -487,16 +535,6 @@
   }
   .maker-chip:hover { background: rgba(255,255,255,0.3); }
   .maker-chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  .cta-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .cta-action {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: #fff; color: var(--brand-strong);
-    border: none; border-radius: 8px;
-    padding: 8px 14px; min-height: 44px;
-    font-family: inherit; font-size: var(--fs-sm); font-weight: 700;
-    text-decoration: none; cursor: pointer;
-  }
-  .cta-action:hover { background: #e8f0fa; }
 
   /* ─── ユーティリティ ─── */
   [hidden] { display: none !important; }
@@ -535,6 +573,17 @@
   .step.is-active { background: var(--brand-soft); color: var(--brand-text); font-weight: 700; }
   .step.is-done { background: var(--ok-soft); color: var(--ok); font-weight: 700; }
   .step .step-state { font-size: var(--fs-xs); font-weight: 400; }
+  /* 完了済みのステップはクリックすると該当する成果物までジャンプできる */
+  .step-btn {
+    all: unset;
+    cursor: pointer;
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .step-btn:disabled { cursor: default; }
+  .step-btn:not(:disabled):hover { text-decoration: underline; }
+  .step-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 
   /* ─── 法規チェックパネル ─── */
   .site-grid {
@@ -606,7 +655,14 @@
   .legal-subhead { font-size: var(--fs-sm); font-weight: 700; color: var(--ink-2); margin: 12px 0 6px; }
 
   .panel-note { font-size: var(--fs-xs); color: var(--ink-2); line-height: 1.7; }
-  .artifact-link { font-size: var(--fs-sm); color: var(--brand-text); font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
+  /* line-height:44pxは1行前提の値なので、折り返して2行になると行間が
+     間延びした上、任意の文字位置で折り返されて読みにくくなる（例:「開く」が
+     「開」「く」で分断される）。折り返しても自然な位置で改行されるようにする */
+  .artifact-link {
+    font-size: var(--fs-sm); color: var(--brand-text); font-weight: 600;
+    display: inline-flex; align-items: center; min-height: 44px; line-height: 1.5;
+    word-break: keep-all; overflow-wrap: break-word;
+  }
 
   /* ─── レスポンシブ ─── */
   @media (max-width: 900px) {
@@ -638,7 +694,7 @@
     header .badge { border-color: #000; color: #000; }
     main { display: block; max-width: none; padding: 0; }
     .no-print, .input-area, .new-session-btn, .skip-link,
-    #preset-card, #phase2-card, .cta-actions, .floorplan-tabs { display: none !important; }
+    #preset-card, #phase2-card, .floorplan-tabs { display: none !important; }
     .sidebar, .right-panel, .chat-container { width: auto; }
     #chat-messages { max-height: none; min-height: 0; overflow: visible; box-shadow: none; border: none; padding: 0; }
     .message.ai .bubble, .message.user .bubble { background: #fff; color: #000; border: 1px solid #999; max-width: 100%; }
@@ -721,11 +777,11 @@
       <summary>フロー</summary>
       <div class="card-body">
         <ol class="flow-list" id="flow-indicator">
-          <li class="step is-active" id="step-hearing">① ヒアリング</li>
-          <li class="step is-idle" id="step-planning">② 間取り生成</li>
-          <li class="step is-idle" id="step-legal">③ 法規チェック</li>
-          <li class="step is-idle" id="step-maker">④ メーカー推薦</li>
-          <li class="step is-idle" id="step-followup">⑤ 送客</li>
+          <li class="step is-active" id="step-hearing"><button class="step-btn" type="button" data-target="chat-top">① ヒアリング</button></li>
+          <li class="step is-idle" id="step-planning"><button class="step-btn" type="button" data-target="plans-block" disabled>② 間取り生成</button></li>
+          <li class="step is-idle" id="step-legal"><button class="step-btn" type="button" data-target="legal-block" disabled>③ 法規チェック</button></li>
+          <li class="step is-idle" id="step-maker"><button class="step-btn" type="button" data-target="maker-block" disabled>④ メーカー推薦</button></li>
+          <li class="step is-idle" id="step-followup"><button class="step-btn" type="button" data-target="cta-block" disabled>⑤ 送客</button></li>
         </ol>
       </div>
     </details>
@@ -735,20 +791,26 @@
       <p class="panel-note" style="margin-bottom:8px;">
         要件・間取り・法規チェック結果・メーカー推薦をまとめた機械可読データ（JSON）です。
       </p>
-      <a id="artifact-link" class="artifact-link" href="#" target="_blank" rel="noopener">📄 成果物データ（JSON）を開く</a>
+      <a id="artifact-link" class="artifact-link" href="#" target="_blank" rel="noopener">📄 成果物データ（JSON）<span class="visually-hidden">を別タブで開く</span></a>
       <button class="retry-btn no-print" type="button" id="print-btn-panel">🖨 印刷 / PDF保存</button>
     </div>
 
     <div class="card no-print" id="phase2-card">
       <h2>Phase 2 予定</h2>
       <div class="panel-note">
-        ⑥ 概算見積AI（坪単価ベース）<br>
-        ⑦ 来場予約連携（外部サイト）<br>
+        ⑥ 詳細見積AI（仕様・地域差を反映した複数メーカー比較見積）<br>
+        ⑦ 来場予約フォーム連携（日時指定・空き状況の連携）<br>
         e-Gov 法令API による条文 RAG
       </div>
     </div>
   </aside>
 </main>
+
+<!-- ─── 間取り図の拡大表示（ライトボックス） ─── -->
+<div class="lightbox no-print" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="間取り図の拡大表示">
+  <button class="lightbox-close" type="button" id="lightbox-close" aria-label="閉じる">✕</button>
+  <img id="lightbox-img" alt="" />
+</div>
 
 <script>
 // ─── 状態管理 ─────────────────────────────────────────────
@@ -867,8 +929,8 @@ function renderMarkdown(text) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    // #〜######（見出しレベルは区別せず、案の見出し等はすべて<h3>にまとめる）
+    .replace(/^#{2,6} (.+)$/gm, '<h3>$1</h3>')
     .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/^---+$/gm, '<hr>')
@@ -1047,7 +1109,12 @@ function renderPlans(plans) {
               ${(plan.rooms || []).length > 6 ? `<li class="room-more">他${plan.rooms.length - 6}室…</li>` : ''}
             </ul>
             <div class="plan-note">${escHtml(plan.rationale)}</div>
-            ${plan.geometry ? renderFloorPlanBlock(plan, i) : ''}
+            ${plan.geometry ? `
+              <details class="floorplan-details" open>
+                <summary>間取り図を見る（1F／2F）</summary>
+                ${renderFloorPlanBlock(plan, i)}
+              </details>
+            ` : ''}
           </div>
         `).join('')}
       </div>
@@ -1098,12 +1165,50 @@ function renderFloorPlanBlock(plan, planIndex) {
           data-floor="${escHtml(f)}">${escHtml(f)}F</button>`).join('')}
     </div>
     <div class="floorplan-img-wrap">
-      <img class="floorplan-img" id="floorplan-img-${planIndex}"
-           alt="間取り図（案${planIndex + 1}）" />
+      <button type="button" class="floorplan-zoom-btn" aria-label="間取り図を拡大表示">
+        <img class="floorplan-img" id="floorplan-img-${planIndex}"
+             alt="間取り図（案${planIndex + 1}）" />
+      </button>
       <p class="floorplan-error" hidden>間取り図を読み込めませんでした（サーバー再起動でセッションが失われた可能性があります）。</p>
     </div>
+    <p class="floorplan-hint no-print">🔍 画像をタップすると拡大表示できます</p>
   `;
 }
+
+// ─── 間取り図の拡大表示（ライトボックス） ───────────────────
+function openLightbox(src, alt) {
+  if (!src) return;
+  const lightboxImg = document.getElementById('lightbox-img');
+  lightboxImg.src = src;
+  lightboxImg.alt = alt || '';
+  const lightbox = document.getElementById('lightbox');
+  lightbox.hidden = false;
+  document.getElementById('lightbox-close').focus();
+}
+
+function closeLightbox() {
+  const lightbox = document.getElementById('lightbox');
+  if (lightbox.hidden) return;
+  lightbox.hidden = true;
+  document.getElementById('lightbox-img').src = '';
+}
+
+// クリック時点で存在する画像だけでなく、後からチャットに追加される間取り図にも
+// 効くよう、チャット全体への委譲イベントとして1回だけ登録する
+chatBox().addEventListener('click', (event) => {
+  const btn = event.target.closest('.floorplan-zoom-btn');
+  if (!btn) return;
+  const img = btn.querySelector('.floorplan-img');
+  if (img && img.src) openLightbox(img.src, img.alt);
+});
+
+document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+document.getElementById('lightbox').addEventListener('click', (event) => {
+  if (event.target.id === 'lightbox') closeLightbox();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeLightbox();
+});
 
 function showFloorPlan(planIndex, floor) {
   const img = document.getElementById(`floorplan-img-${planIndex}`);
@@ -1297,21 +1402,18 @@ async function showCtaBanner(makerRecs) {
          + `${escHtml(m.name)} ↗<span class="visually-hidden">（公式サイトを別タブで開く）</span></a>`;
   }).join('');
 
-  const artifactUrl = `${API_BASE}/artifact/${encodeURIComponent(sessionId)}`;
-  const block = appendBlock('cta-block', `
+  // 印刷／成果物データの導線は右パネルの「成果物」カード（#artifact-card）に
+  // 一本化する。以前はここにも同じ機能のボタンを重複して置いていた
+  // （ラベルも「印刷 / PDFで持ち出す」と「印刷/PDF保存」で不統一だった）。
+  appendBlock('cta-block', `
     <div class="cta-banner">
       <h3>📋 ハウスメーカーへの相談・来場予約</h3>
       <p>ご提案した間取り案・推薦メーカーを持参すれば、商談がスムーズになります。
-         メーカー名を押すと公式サイトが別タブで開きます。</p>
+         メーカー名を押すと公式サイトが別タブで開きます。
+         印刷や成果物データの取得は右パネルの「成果物」からどうぞ。</p>
       <div class="maker-chips">${chips}</div>
-      <div class="cta-actions">
-        <button class="cta-action no-print" type="button" id="print-btn-cta">🖨 印刷 / PDFで持ち出す</button>
-        <a class="cta-action" href="${escHtml(artifactUrl)}" target="_blank" rel="noopener">📄 成果物データ（JSON）を開く</a>
-      </div>
     </div>
   `);
-  const printBtn = block.querySelector('#print-btn-cta');
-  if (printBtn) printBtn.addEventListener('click', () => window.print());
 }
 
 // ─── フロー表示 ───────────────────────────────────
@@ -1343,8 +1445,27 @@ function updateFlowStep(stage, hasLegal) {
       el.appendChild(note);
     }
     note.textContent = ' ' + label;
+
+    // 完了済み（成果物が実際にチャットへ描画済み）のときだけジャンプボタンを有効化する。
+    // 「chat-top」（①ヒアリング＝会話の先頭へ戻る）はチャットが存在する限り常に押せる。
+    const btn = el.querySelector('.step-btn');
+    if (btn) {
+      btn.disabled = btn.dataset.target === 'chat-top' ? false : !document.getElementById(btn.dataset.target);
+    }
   });
 }
+
+// フローの項目をクリックすると、対応する成果物ブロックまでスクロールする
+document.getElementById('flow-indicator').addEventListener('click', (event) => {
+  const btn = event.target.closest('.step-btn');
+  if (!btn || btn.disabled) return;
+  if (btn.dataset.target === 'chat-top') {
+    chatBox().scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  const target = document.getElementById(btn.dataset.target);
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 
 function showArtifactLink() {
   const card = document.getElementById('artifact-card');
@@ -1364,8 +1485,13 @@ function setLoading(loading) {
   // 送信中に入力しても何も起きず「壊れている」ように見えるため、状態を明示する
   input.disabled = loading;
   input.placeholder = loading
-    ? 'AIが回答を生成しています…（完了までお待ちください）'
+    ? 'AIが回答を生成中…（完了までお待ちください）'
     : 'ご要望をご自由にお話しください…（Shift+Enterで改行、Enterで送信）';
+  // この時点で入力欄は必ず空欄。autoResize()はscrollHeightを見るが、
+  // 空欄でもプレースホルダーの折り返し行数の影響を受けて高さが変わることがある
+  // （通常時の文言は2行に折り返るため、送信直後に入力欄が縦に大きくなって
+  // 見える副作用があった）。空欄なら常にCSSの既定サイズに戻す。
+  input.style.height = '';
 }
 
 async function handleSend(retryMessage) {
@@ -1418,9 +1544,11 @@ async function handleSend(retryMessage) {
     }
 
     if (data.done) {
-      updateFlowStep('follow_up', hasLegal);
       showArtifactLink();
       if (!rendered.cta) { rendered.cta = true; await showCtaBanner(makerRecs); }
+      // cta-block（⑤送客のジャンプ先）が描画された後に呼ぶ必要があるため、
+      // showCtaBanner の後に実行する
+      updateFlowStep('follow_up', hasLegal);
     } else {
       updateFlowStep(data.stage || 'hearing', hasLegal);
     }
@@ -1494,7 +1622,7 @@ document.getElementById('new-session-btn').addEventListener('click', () => {
 // 印刷時は折りたたみカードを開いておく（閉じたままだと中身が出力されない）
 let reopenedDetails = [];
 window.addEventListener('beforeprint', () => {
-  reopenedDetails = Array.from(document.querySelectorAll('details.card:not([open])'));
+  reopenedDetails = Array.from(document.querySelectorAll('details.card:not([open]), details.floorplan-details:not([open])'));
   reopenedDetails.forEach(d => { d.open = true; });
 });
 window.addEventListener('afterprint', () => {

@@ -17,6 +17,7 @@ from typing import Any, Optional
 
 from app.schemas.legal import SiteInfo
 from app.schemas.requirements import RequirementBaseline
+from app.tools.area_utils import parse_area_sqm
 from app.tools.zoning import get_rule, normalize_zoning
 
 SITE_EXTRACTION_PROMPT = """あなたは住宅の敷地情報を整理する専門AIです。
@@ -131,9 +132,14 @@ def extract_site_from_text(requirements: RequirementBaseline, llm) -> dict[str, 
             continue
         if not isinstance(data, dict):
             continue
+        # 坪→㎡の換算をLLMに直接やらせると誤ることがある（例:「約40坪」を13.4㎡と
+        # 誤算出。本来は約132㎡）。area_utils.parse_area_sqm による決定論的な
+        # 変換が可能ならそちらを優先する。
+        parsed_area = parse_area_sqm(requirements.land_info)
+        site_area_sqm = parsed_area if parsed_area is not None else _coerce_float(data.get("site_area_sqm"))
         return {
             "address": data.get("address") or None,
-            "site_area_sqm": _coerce_float(data.get("site_area_sqm")),
+            "site_area_sqm": site_area_sqm,
             "zoning": normalize_zoning(data.get("zoning")),
             "road_width_m": _coerce_float(data.get("road_width_m")),
             "fire_zone": data.get("fire_zone") or None,

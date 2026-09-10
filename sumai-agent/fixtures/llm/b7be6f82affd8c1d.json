@@ -1,9 +1,9 @@
 {
-  "key": "9c6afae1800fe8ff514ce08927f40b243458b15c00105873bc579281d9889938",
-  "model": "qwen2.5:7b",
+  "key": "b7be6f82affd8c1dc338694dfefa2b301d0bafa45f90a92d0fd67b8ecffc7614",
+  "model": "qwen2.5:3b",
   "json_mode": true,
-  "recorded_at": "2026-08-25T02:50:01.079940+00:00",
-  "elapsed_sec": 50.8,
+  "recorded_at": "2026-09-10T03:35:55.919600+00:00",
+  "elapsed_sec": 1.1,
   "messages": [
     {
       "role": "system",
@@ -11,8 +11,8 @@
     },
     {
       "role": "human",
-      "content": "## 住宅要件書（敷地に関する記述）\n- 土地情報: さいたま市、約50坪（165㎡）、第一種低層住居専用地域、前面道路幅員4m\n- 希望の広さ・部屋数: 未定\n- その他の要望: 未定\n\n上記から敷地情報を抽出してJSONで返してください。\n"
+      "content": "## 住宅要件書（敷地に関する記述）\n- 土地情報: 埼玉県内で探す\n- 希望の広さ・部屋数: 広さ・部屋数未指定（3LDK・30坪前後を想定）\n- その他の要望: 土地はまだ持っていない\n\n上記から敷地情報を抽出してJSONで返してください。\n"
     }
   ],
-  "response": "{\n  \"address\": \"さいたま市\",\n  \"site_area_sqm\": 165.0,\n  \"zoning\": \"第一種低層住居専用地域\",\n  \"road_width_m\": 4.0,\n  \"fire_zone\": null,\n  \"has_land\": true\n}"
+  "response": "{\n  \"address\": null,\n  \"site_area_sqm\": null,\n  \"zoning\": null,\n  \"road_width_m\": null,\n  \"fire_zone\": null,\n  \"has_land\": false\n}"
 }
