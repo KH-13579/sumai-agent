@@ -45,6 +45,59 @@ def _format_area_tatami(area_m2: float) -> str:
     """
     return f"{round(area_m2 / TATAMI_M2, 1)}畳"
 
+
+# 坪単価の概算レンジ（木造想定）。プロンプト中の説明文と揃えること。
+_TSUBO_UNIT_PRICE_LOW = 60
+_TSUBO_UNIT_PRICE_HIGH = 80
+
+
+def _format_estimated_cost(total_floor_area_m2: float) -> str:
+    """延床面積(m2)から概算費用を坪単価ベースで機械的に算出する
+
+    estimated_costをLLMの自由記述に任せると、プロンプトのfew-shot例文
+    「2,400〜3,000万円（建物本体。坪単価65万円前後）」をそのまま出力してしまい、
+    面積が異なる案でも費用が一言一句同じになりかねない。
+    _format_area_tatami と同じ理由で、費用も常に確定した延床面積から
+    計算し、LLMの出力は使わない。
+    """
+    tsubo = total_floor_area_m2 / TSUBO_M2
+    low = round(tsubo * _TSUBO_UNIT_PRICE_LOW / 100) * 100
+    high = round(tsubo * _TSUBO_UNIT_PRICE_HIGH / 100) * 100
+    return f"{low:,.0f}〜{high:,.0f}万円（建物本体。坪単価{_TSUBO_UNIT_PRICE_LOW}〜{_TSUBO_UNIT_PRICE_HIGH}万円想定）"
+
+# 部屋タイプ別の面積レンジ(m2)。下のプロンプト文言（_ROOM_SIZE_REFERENCE）と
+# 必ず同じ数値を使うこと。「必ずこの範囲に収める」とプロンプトで指示しても、
+# 小型モデルは守れないことがある（主寝室が20畳＝約33m2になる、トイレが4m2超に
+# なる等）。指示が効かない領域なので、_rooms_to_specs で確実にクランプする。
+_ROOM_AREA_BOUNDS_M2: dict[str, tuple[float, float]] = {
+    "LDK": (25.0, 42.0), "リビング": (13.0, 20.0), "ダイニング": (10.0, 13.0),
+    "キッチン": (7.0, 10.0), "パントリー": (2.0, 3.0), "和室": (7.0, 13.0),
+    "主寝室": (10.0, 17.0), "寝室": (7.0, 13.0), "子供部屋": (7.0, 10.0), "書斎": (5.0, 10.0),
+    "浴室": (3.0, 5.0), "洗面脱衣": (3.0, 5.0), "トイレ": (1.6, 2.0),
+    "収納": (2.0, 5.0), "WIC": (2.0, 5.0), "バルコニー": (3.0, 7.0),
+}
+
+
+# 延床面積への合わせ込み(_rescale_specs_to_target)の後段でも同じ上限で
+# 厳密にクランプすると、コンセプトごとの延床面積の違い（コスパ重視は小さめ／
+# 広さ重視は大きめ）が部屋サイズに反映されず、3案の部屋構成がほぼ同じ数値に
+# 収束してしまう（副作用として概算費用まで同額になる）。
+# 再スケール後は許容範囲を広げ、「明らかにおかしい」極端な値だけを補正する。
+_POST_RESCALE_TOLERANCE = 1.4
+
+
+def _clamp_room_area(room_type: str, area_m2: float, *, tolerance: float = 1.0) -> float:
+    """部屋タイプ別の目安レンジ(_ROOM_AREA_BOUNDS_M2)に収まるよう補正する
+
+    tolerance>1.0 を渡すと上限・下限を緩め、多少の逸脱は許容する（再スケール後用）。
+    """
+    bounds = _ROOM_AREA_BOUNDS_M2.get(room_type)
+    if not bounds:
+        return area_m2
+    lo, hi = bounds
+    return min(max(area_m2, lo / tolerance), hi * tolerance)
+
+
 _ROOM_SIZE_REFERENCE = """## 部屋タイプ別の一般的な広さの目安（必ずこの範囲に収める）
 - LDK: 15〜25畳（約25〜42m2）
 - リビング: 8〜12畳（約13〜20m2）
@@ -88,6 +141,18 @@ PLANNING_SYSTEM_PROMPT = f"""あなたは住宅設計の専門家AIです。
 - layout_description: 間取りの全体説明（動線・採光・階構成）
 - rationale: ユーザー要望への適合根拠
 - estimated_cost: 概算費用レンジ（坪単価ベース: 木造60〜80万円/坪として概算）
+
+## rationale・layout_descriptionの整合性（重要）
+rationale・layout_descriptionでは、**この案のroomsに実際に含めた部屋・設備だけ**を
+根拠として挙げること。例えば書斎を勧める理由に使うなら、その案のroomsに書斎を
+必ず含める。roomsに入れていない部屋（書斎・和室など）を「設置可能」「対応」のように
+言及してはならない（実際には無いのに「ある」と誤解させるため）。
+
+## ユーザーが明示的に希望した部屋・設備の扱い（重要）
+ユーザーが「書斎が欲しい」のように名指しで希望した部屋・設備は、**3案のうち
+最低2案には反映する**こと（3案とも面積の都合で難しい場合のみ1案に絞ってよいが、
+その場合は理由をrationaleで具体的に説明する）。名指しの希望を1案にしか反映しない
+まま特に説明もない、という状態は避ける。
 
 ## 出力フォーマット（必ずJSON形式で返す）
 {{
@@ -149,6 +214,65 @@ class _LLMFloorPlan(BaseModel):
     estimated_cost: Optional[str] = None
 
 
+# ユーザーが名指しで要望した場合に、最低2/3案への反映を保証する「任意扱いになりがちな」
+# 部屋タイプ。LDK・主寝室・トイレ等の基本部屋は本来どの案にも入るはずなので対象外にする。
+_OPTIONAL_ROOM_TYPES = ("書斎", "和室", "WIC", "パントリー", "バルコニー")
+_MIN_PLANS_WITH_REQUESTED_ROOM = 2
+
+
+def _detect_requested_room_types(requirements: RequirementBaseline) -> List[str]:
+    """要件書の自由記述欄から、名指しで要望された部屋タイプを検出する"""
+    text = "".join(filter(None, [
+        requirements.notes, requirements.lifestyle_flow,
+        requirements.desired_size, requirements.storage_needs,
+    ]))
+    return [rt for rt in _OPTIONAL_ROOM_TYPES if rt in text]
+
+
+def _inject_room(plan: "_LLMFloorPlan", room_type: str, lo: float, hi: float) -> None:
+    declared_floor_count = _parse_declared_floor_count(plan.floors)
+    floor = 2 if declared_floor_count >= 2 else 1
+    plan.rooms.append(_LLMRoom(
+        name=room_type, note=None, room_type=room_type,
+        area_m2=round((lo + hi) / 2, 1), floor=floor,
+    ))
+
+
+def _ensure_requested_rooms_present(plans: List["_LLMFloorPlan"], requirements: RequirementBaseline) -> None:
+    """名指しで要望された部屋タイプが、最低2/3案には入るよう保証する
+
+    プロンプトで「複数案に反映すること」と指示しても、小型モデルは1案にしか
+    反映しないことがある。部屋の有無は機械的に判定できるので、プロンプトの
+    指示だけに頼らず決定論的に補う。
+    """
+    if len(plans) < 2:
+        return
+    target_count = min(_MIN_PLANS_WITH_REQUESTED_ROOM, len(plans))
+    for room_type in _detect_requested_room_types(requirements):
+        lo, hi = _ROOM_AREA_BOUNDS_M2.get(room_type, (5.0, 8.0))
+        has_room = [any(r.room_type == room_type for r in p.rooms) for p in plans]
+        mentions = [room_type in (p.layout_description + p.rationale) for p in plans]
+
+        needed = target_count - sum(has_room)
+        if needed > 0:
+            # 部屋は無いのに説明文だけでその部屋の存在を主張している案があれば、
+            # 文章と部屋リストの不整合を解消できるようそちらを優先して補う。
+            missing_indices = [i for i, already in enumerate(has_room) if not already]
+            missing_indices.sort(key=lambda i: not mentions[i])
+            for i in missing_indices[:needed]:
+                _inject_room(plans[i], room_type, lo, hi)
+                has_room[i] = True
+
+        # 上記で必要数を満たしてもなお、部屋が無いのに文章だけがその部屋の存在を
+        # 主張している案が残っていれば、差別化よりも「書いてあることと実際の
+        # 部屋が食い違わない」ことを優先し、そちらにも追加する（小型モデルは
+        # 3案すべての説明文に同じ部屋を書いてしまうことがあり、優先順位付け
+        # だけでは解消しきれないため）。
+        for i, (already, mentioned) in enumerate(zip(has_room, mentions)):
+            if not already and mentioned:
+                _inject_room(plans[i], room_type, lo, hi)
+
+
 class _LLMPlanningOutput(BaseModel):
     plans: List[_LLMFloorPlan] = Field(description="生成した間取り案（3案）")
     summary: str = Field(description="3案の比較サマリー")
@@ -168,7 +292,7 @@ def _rooms_to_specs(rooms: List[_LLMRoom]) -> tuple[List[RoomSpec], List[str]]:
                 room_id=f"room{idx}",
                 room_type=room_type,
                 label=room.name,
-                target_area_m2=room.area_m2,
+                target_area_m2=_clamp_room_area(room_type, room.area_m2),
                 floor=floor,
             )
         )
@@ -256,7 +380,17 @@ def _rescale_specs_to_target(
             f"{round(scale, 2)}倍にスケール補正しました"
         )
 
-    rescaled = [s.model_copy(update={"target_area_m2": round(s.target_area_m2 * scale, 2)}) for s in specs]
+    # 延床面積への合わせ込み（scale）は全部屋に一律で掛かるため、クランプ済みの
+    # 部屋がここで再び目安レンジの外に押し戻されることがある。再度クランプして
+    # 「延床面積の帳尻合わせで主寝室だけ異常に大きくなる」を確実に防ぐ。
+    rescaled = [
+        s.model_copy(update={
+            "target_area_m2": _clamp_room_area(
+                s.room_type, round(s.target_area_m2 * scale, 2), tolerance=_POST_RESCALE_TOLERANCE
+            )
+        })
+        for s in specs
+    ]
     return rescaled, warnings
 
 
@@ -310,6 +444,21 @@ def _build_floor_plan(llm_plan: _LLMFloorPlan, requirements: RequirementBaseline
     except Exception:
         logger.exception("案「%s」のジオメトリ生成に失敗しました。テキスト提案のみ返します", llm_plan.concept)
 
+    # 概算費用は「申告延床面積」（コンセプトごとに意図的に差をつけている数値）を
+    # 優先して使う。部屋面積合計から逆算する方式だと、_clamp_room_area の許容範囲に
+    # 収まるよう複数案が同じような値に補正され、費用まで同額になってしまうため、
+    # 申告値が非現実的な場合のみ部屋面積合計にフォールバックする。
+    if target_total_m2 is not None and _PLAUSIBLE_TOTAL_AREA_MIN_M2 <= target_total_m2 <= _PLAUSIBLE_TOTAL_AREA_MAX_M2:
+        estimated_total_floor_area_m2 = target_total_m2
+    else:
+        total_room_area_m2 = sum(r.area_m2 for r in rooms)
+        estimated_total_floor_area_m2 = total_room_area_m2 / (1 - CIRCULATION_AREA_RATIO) if total_room_area_m2 > 0 else None
+    estimated_cost = (
+        _format_estimated_cost(estimated_total_floor_area_m2)
+        if estimated_total_floor_area_m2
+        else llm_plan.estimated_cost
+    )
+
     return FloorPlan(
         concept=llm_plan.concept,
         total_floor_area=llm_plan.total_floor_area,
@@ -317,7 +466,7 @@ def _build_floor_plan(llm_plan: _LLMFloorPlan, requirements: RequirementBaseline
         rooms=rooms,
         layout_description=llm_plan.layout_description,
         rationale=llm_plan.rationale,
-        estimated_cost=llm_plan.estimated_cost,
+        estimated_cost=estimated_cost,
         geometry=geometry,
         check=check,
     )
@@ -380,6 +529,8 @@ def run_planning(
             plans=[],
             summary="間取り案の生成中にエラーが発生しました。もう一度お試しください。",
         )
+
+    _ensure_requested_rooms_present(result.plans, requirements)
 
     plans: List[FloorPlan] = []
     for p in result.plans:
