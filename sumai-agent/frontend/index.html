@@ -760,7 +760,7 @@
       <label class="visually-hidden" for="user-input">ご要望の入力</label>
       <textarea
         id="user-input"
-        placeholder="ご要望をご自由にお話しください…（Shift+Enterで改行、Enterで送信）"
+        placeholder="ご要望をお話しください"
         rows="1"
       ></textarea>
       <button id="send-btn" type="submit">送信 ▶</button>
@@ -1486,7 +1486,7 @@ function setLoading(loading) {
   input.disabled = loading;
   input.placeholder = loading
     ? 'AIが回答を生成中…（完了までお待ちください）'
-    : 'ご要望をご自由にお話しください…（Shift+Enterで改行、Enterで送信）';
+    : 'ご要望をお話しください';
   // この時点で入力欄は必ず空欄。autoResize()はscrollHeightを見るが、
   // 空欄でもプレースホルダーの折り返し行数の影響を受けて高さが変わることがある
   // （通常時の文言は2行に折り返るため、送信直後に入力欄が縦に大きくなって
